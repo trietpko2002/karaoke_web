@@ -30,7 +30,7 @@ button.searchBtn:hover{ background:#e52a2f; }
 
 <div id="topBar">
   <div id="dateTime"></div>
-  <div>Ver Web: 2.2</div>
+  <div>Ver Web: 2.3</div>
   <button id="refreshBtn">🔄 Refresh</button>
 </div>
 
@@ -39,7 +39,6 @@ button.searchBtn:hover{ background:#e52a2f; }
   <div class="search-bar">
     <input id="q" placeholder="Nhập từ khóa..." />
     <button class="searchBtn" id="searchBtn">🔍</button>
-    <button id="playBtn">▶️ Phát & Thêm</button>
     <button id="resetScreenBtn">🔄 Reset Screen</button>
   </div>
   <div style="margin-top:10px;">
@@ -83,7 +82,6 @@ const resetRef = ref(db, "resetScreen");
 // DOM
 const qInput=document.getElementById("q");
 const searchBtn=document.getElementById("searchBtn");
-const playBtn=document.getElementById("playBtn");
 const resetScreenBtn=document.getElementById("resetScreenBtn");
 const listEl=document.getElementById("list");
 const statusEl=document.getElementById("status");
@@ -122,9 +120,9 @@ async function search(){
       el.className="item";
       el.innerHTML=`<img src="${v.snippet.thumbnails.medium.url}"><div class="title">${v.snippet.title}</div>`;
       el.onclick=()=>{ 
-        qInput.dataset.selectedId = v.id.videoId;
-        qInput.dataset.selectedTitle = v.snippet.title;
-        statusEl.textContent=`✅ Chọn bài: ${v.snippet.title}`;
+        // Nhấn vào bài là tự động phát luôn
+        set(commandRef,{id:v.id.videoId,title:v.snippet.title,play:true,roomId});
+        statusEl.textContent=`▶️ Đang phát: ${v.snippet.title}`;
       };
       listEl.appendChild(el);
     });
@@ -132,15 +130,6 @@ async function search(){
 }
 searchBtn.onclick=search;
 qInput.addEventListener("keypress",e=>{if(e.key==="Enter") search();});
-
-// Phát
-playBtn.onclick=()=>{
-  const id = qInput.dataset.selectedId;
-  const title = qInput.dataset.selectedTitle;
-  if(!id) return alert("Chọn bài trước khi phát!");
-  set(commandRef,{id,title,play:true,roomId});
-  statusEl.textContent=`▶️ Phát bài: ${title}`;
-};
 
 // 🔄 Reset Screen
 resetScreenBtn.onclick=()=>{
