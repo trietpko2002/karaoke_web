@@ -5,43 +5,49 @@
 <title>Karaoke Remote</title>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <style>
-body { margin:0; font-family:sans-serif; background:#1a1a1a; color:#fff; display:flex; height:100vh; justify-content:center; align-items:center; }
-.container { width:90%; max-width:800px; background:#222; padding:20px; border-radius:10px; box-shadow:0 0 10px #000; }
-h2 { margin-bottom:15px; color:#ff3b3f; border-bottom:2px solid #ff3b3f; padding-bottom:5px; text-align:center; }
-.search-bar { display:flex; gap:5px; margin-bottom:10px; }
-input { flex:1; padding:10px; border:none; border-radius:5px; font-size:16px; outline:none; }
-button { padding:10px 12px; border:none; background:#ff3b3f; color:white; border-radius:5px; cursor:pointer; transition:0.2s; }
+body { margin:0; font-family:sans-serif; background:#1a1a1a; color:#fff; display:flex; height:100vh; }
+#left { width:100%; padding:20px; background:#2a2a2a; overflow-y:auto; }
+h2 { margin-bottom:15px; color:#ff3b3f; border-bottom:2px solid #ff3b3f; padding-bottom:5px; }
+.search-bar { display:flex; }
+input { flex:1; padding:10px; border:none; border-radius:5px 0 0 5px; font-size:16px; outline:none; }
+button { padding:10px 14px; border:none; background:#ff3b3f; color:white; border-radius:0 5px 5px 0; cursor:pointer; transition:0.2s; font-weight:bold; }
 button:hover { background:#e52a2f; }
-.switch { display:flex; align-items:center; margin-bottom:10px; gap:6px; }
 .item { display:flex; align-items:center; margin-top:10px; background:#333; padding:8px; border-radius:6px; cursor:pointer; transition:0.2s; }
 .item:hover { background:#444; }
-.item img { width:100px; height:70px; object-fit:cover; margin-right:12px; border-radius:6px; }
+.item img { width:80px; height:60px; object-fit:cover; margin-right:12px; border-radius:6px; }
 .title { font-size:0.95em; line-height:1.2em; flex:1; color:#fff; }
-#status { margin-top:10px; color:#aaa; font-size:0.9em; text-align:center; }
+#status { margin-top:10px; color:#aaa; font-size:0.9em; }
+.controls { display:flex; gap:10px; margin-top:15px; }
+.controls button { flex:1; border-radius:6px; font-size:15px; }
 </style>
 </head>
 <body>
-<div class="container">
-  <h2>🎤 Karaoke Gia Đình</h2>
 
+<div id="left">
+  <h2>🎤 Tìm bài hát</h2>
   <div class="search-bar">
-    <input id="q" placeholder="Nhập tên bài hát..." />
-    <button onclick="search()">Tìm</button>
+    <input id="q" placeholder="Nhập từ khóa..." />
+    <button id="searchBtn">🔍</button>
     <button id="stopBtn">⏹️ Dừng</button>
   </div>
 
-  <div class="switch">
+  <div style="margin-top:10px;">
     <input type="checkbox" id="karaokeOnly" checked />
     <label for="karaokeOnly">Chỉ Karaoke</label>
   </div>
 
   <div id="status"></div>
   <div id="list"></div>
+
+  <div class="controls">
+    <button id="muteBtn">🔇 Tắt/Bật âm thanh</button>
+    <input type="range" min="0" max="100" value="100" id="volumeSlider">
+  </div>
 </div>
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
-import { getDatabase, ref, set } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-database.js";
+import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-database.js";
 
 const firebaseConfig = { 
   apiKey: "AIzaSyC1JW_dg-YChaizarbS-7UUN3njFomMPvI",
@@ -55,55 +61,83 @@ const firebaseConfig = {
 };
 
 const API_KEY = "AIzaSyALYcXF9pG01RbeCx6DaZADNwNro2NKq4I";
+
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
-const commandRef = ref(db,"command");
+const commandRef = ref(db, "command");
 
+const qInput = document.getElementById("q");
+const searchBtn = document.getElementById("searchBtn");
+const stopBtn = document.getElementById("stopBtn");
 const listEl = document.getElementById("list");
 const statusEl = document.getElementById("status");
-const stopBtn = document.getElementById("stopBtn");
+const muteBtn = document.getElementById("muteBtn");
+const volumeSlider = document.getElementById("volumeSlider");
 let muteState = false;
 
-// 🔍 Tìm kiếm bài hát
-async function search(){
-  const q = document.getElementById("q").value.trim();
+// --- TÌM KIẾM VIDEO ---
+async function search() {
+  const q = qInput.value.trim();
   const karaokeOnly = document.getElementById("karaokeOnly").checked;
-  if(!q) return alert("Nhập từ khóa!");
+  if (!q) return alert("Nhập từ khóa!");
   listEl.innerHTML = "";
-  statusEl.textContent="🔍 Đang tìm...";
-  try{
-    const res = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=12&q=${encodeURIComponent(q + (karaokeOnly?" karaoke":""))}&videoEmbeddable=true&key=${API_KEY}`);
+  statusEl.textContent = "🔍 Đang tìm kiếm...";
+
+  try {
+    const res = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=12&q=${encodeURIComponent(q + (karaokeOnly ? " karaoke" : ""))}&videoEmbeddable=true&key=${API_KEY}`);
     const data = await res.json();
-    statusEl.textContent="";
-    if(!data.items || data.items.length===0){ statusEl.textContent="❌ Không tìm thấy"; return; }
-    data.items.forEach(v=>{
-      if(!v.id?.videoId) return;
-      const el=document.createElement("div");
-      el.className="item";
-      el.innerHTML=`<img src="${v.snippet.thumbnails.medium.url}"><div class="title">${v.snippet.title}</div>`;
-      el.onclick=()=> playNow(v.id.videoId, v.snippet.title);
+    statusEl.textContent = "";
+    if (!data.items || data.items.length === 0) {
+      statusEl.textContent = "Không tìm thấy kết quả.";
+      return;
+    }
+
+    data.items.forEach(v => {
+      if (!v.id?.videoId) return;
+      const el = document.createElement("div");
+      el.className = "item";
+      el.innerHTML = `
+        <img src="${v.snippet.thumbnails.medium.url}">
+        <div class="title">${v.snippet.title}</div>
+      `;
+      el.onclick = () => {
+        set(commandRef, { id: v.id.videoId, title: v.snippet.title, play: true, mute: muteState });
+        statusEl.textContent = "▶️ Đang phát: " + v.snippet.title;
+      };
       listEl.appendChild(el);
     });
-  }catch(e){ console.error(e); statusEl.textContent="⚠️ Lỗi tìm kiếm"; }
+  } catch (err) {
+    console.error(err);
+    statusEl.textContent = "⚠️ Lỗi khi tìm kiếm!";
+  }
 }
 
-// ▶️ Phát ngay bài hát được chọn
-function playNow(id, title){
-  set(commandRef,{id,title,play:true,mute:muteState});
-  statusEl.textContent=`🎵 Đang phát: ${title}`;
-}
+// --- ĐIỀU KHIỂN ---
+searchBtn.onclick = search;
+qInput.addEventListener("keypress", e => { if (e.key === "Enter") search(); });
 
-// ⏹️ Dừng bài, chuyển về intro/slide
-stopBtn.onclick = ()=>{
-  set(commandRef,{id:"",title:"Intro / Slide",play:false,mute:muteState});
-  statusEl.textContent="⏹️ Đã dừng bài hát";
+stopBtn.onclick = () => {
+  set(commandRef, { id: "", title: "Intro / Slide", play: false, mute: muteState });
+  statusEl.textContent = "⏹️ Đã dừng phát";
 };
 
-// Gõ Enter để tìm nhanh
-document.getElementById("q").addEventListener("keydown", e=>{
-  if(e.key==="Enter") search();
-});
+muteBtn.onclick = () => {
+  muteState = !muteState;
+  set(commandRef, { mute: muteState });
+  muteBtn.textContent = muteState ? "🔊 Bật âm thanh" : "🔇 Tắt âm thanh";
+};
 
+volumeSlider.oninput = () => {
+  set(commandRef, { volume: Number(volumeSlider.value) });
+};
+
+// --- CẬP NHẬT TRẠNG THÁI TỪ SCREEN ---
+onValue(commandRef, snapshot => {
+  const cmd = snapshot.val();
+  if (!cmd) return;
+  muteBtn.textContent = cmd.mute ? "🔊 Bật âm thanh" : "🔇 Tắt âm thanh";
+  volumeSlider.value = cmd.volume ?? 100;
+});
 </script>
 </body>
 </html>
