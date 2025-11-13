@@ -30,7 +30,7 @@ button.searchBtn:hover{ background:#e52a2f; }
 
 <div id="topBar">
   <div id="dateTime"></div>
-  <div>Ver Web: 2.3</div>
+  <div>Ver Web: 2.4</div>
   <button id="refreshBtn">🔄 Refresh</button>
 </div>
 
@@ -59,9 +59,8 @@ button.searchBtn:hover{ background:#e52a2f; }
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
-import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-database.js";
+import { getDatabase, ref, set, onValue, update } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-database.js";
 
-// Firebase
 const firebaseConfig = { 
   apiKey: "AIzaSyC1JW_dg-YChaizarbS-7UUN3njFomMPvI",
   authDomain: "karaokeweb-d414b.firebaseapp.com",
@@ -73,13 +72,13 @@ const firebaseConfig = {
   measurementId: "G-VZ228HB7GF"
 };
 const API_KEY = "AIzaSyALYcXF9pG01RbeCx6DaZADNwNro2NKq4I";
+
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
-const commandRef = ref(db, "command");
-const connectionRef = ref(db, "connectionStatus");
-const resetRef = ref(db, "resetScreen");
+const commandRef = ref(db,"command");
+const connectionRef = ref(db,"connectionStatus");
+const resetRef = ref(db,"resetScreen");
 
-// DOM
 const qInput=document.getElementById("q");
 const searchBtn=document.getElementById("searchBtn");
 const resetScreenBtn=document.getElementById("resetScreenBtn");
@@ -91,78 +90,115 @@ const connectBtn=document.getElementById("connectBtn");
 const disconnectBtn=document.getElementById("disconnectBtn");
 const resetBtn=document.getElementById("resetBtn");
 
-// Room
 let roomId = localStorage.getItem("roomId") || Math.floor(100000 + Math.random()*900000).toString();
 localStorage.setItem("roomId", roomId);
 
-// Ngày giờ & Refresh
+// DateTime
 const dateTimeEl=document.getElementById("dateTime");
-const refreshBtn=document.getElementById("refreshBtn");
-function updateDateTime(){ const now=new Date(); dateTimeEl.textContent=now.toLocaleString(); }
-setInterval(updateDateTime,1000);
-updateDateTime();
-refreshBtn.onclick=()=>location.reload();
+setInterval(()=>{ dateTimeEl.textContent=new Date().toLocaleString(); },1000);
 
-// Search YouTube
+// Search
 async function search(){
   const q=qInput.value.trim();
   const karaokeOnly=document.getElementById("karaokeOnly").checked;
   if(!q) return alert("Nhập từ khóa!");
-  listEl.innerHTML=""; statusEl.textContent="🔍 Đang tìm kiếm...";
-  try{
-    const res=await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=12&q=${encodeURIComponent(q + (karaokeOnly?" karaoke":""))}&videoEmbeddable=true&key=${API_KEY}`);
-    const data=await res.json();
-    statusEl.textContent="";
-    if(!data.items || data.items.length===0){ statusEl.textContent="Không tìm thấy kết quả."; return; }
-    data.items.forEach(v=>{
-      if(!v.id?.videoId) return;
-      const el=document.createElement("div");
-      el.className="item";
-      el.innerHTML=`<img src="${v.snippet.thumbnails.medium.url}"><div class="title">${v.snippet.title}</div>`;
-      el.onclick=()=>{ 
-        // Nhấn vào bài là tự động phát luôn
-        set(commandRef,{id:v.id.videoId,title:v.snippet.title,play:true,roomId});
-        statusEl.textContent=`▶️ Đang phát: ${v.snippet.title}`;
-      };
-      listEl.appendChild(el);
-    });
-  }catch(err){ console.error(err); statusEl.textContent="⚠️ Lỗi khi tìm kiếm!"; }
-}
-searchBtn.onclick=search;
-qInput.addEventListener("keypress",e=>{if(e.key==="Enter") search();});
 
-// 🔄 Reset Screen
+  listEl.innerHTML=""; 
+  statusEl.textContent="🔍 Đang tìm kiếm...";
+
+  const res=await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=12&q=${encodeURIComponent(q+(karaokeOnly?" karaoke":""))}&key=${API_KEY}`);
+  const data=await res.json();
+
+  statusEl.textContent="";
+
+  if(!data.items?.length){
+    statusEl.textContent="Không tìm thấy kết quả.";
+    return;
+  }
+
+  data.items.forEach(v=>{
+    if(!v.id?.videoId) return;
+    const el=document.createElement("div");
+    el.className="item";
+    el.innerHTML=`
+      <img src="${v.snippet.thumbnails.medium.url}">
+      <div class="title">${v.snippet.title}</div>
+    `;
+    el.onclick=()=>{
+
+      update(commandRef,{
+        id:v.id.videoId,
+        title:v.snippet.title,
+        roomId:roomId
+      });
+
+      statusEl.textContent=`▶️ Đang phát: ${v.snippet.title}`;
+    };
+    listEl.appendChild(el);
+  });
+}
+
+searchBtn.onclick=search;
+
+// Reset Screen
 resetScreenBtn.onclick=()=>{
-  if(confirm("Bạn có chắc muốn reload lại màn hình Screen không?")){
-    set(resetRef,true);
-    statusEl.textContent="🔄 Đã gửi lệnh reset screen!";
-    setTimeout(()=>set(resetRef,false),3000);
+  set(resetRef,true);
+  statusEl.textContent="🔄 Đã gửi lệnh reset screen!";
+  setTimeout(()=>set(resetRef,false),2000);
+};
+
+// Mute
+let muteState=false;
+muteBtn.onclick=()=>{
+  muteState=!muteState;
+  update(commandRef,{mute:muteState, roomId});
+  muteBtn.textContent = muteState? "🔊 Bật âm thanh" : "🔇 Tắt âm thanh";
+};
+
+// Volume
+volumeSlider.oninput=()=>{
+  update(commandRef,{
+    volume:Number(volumeSlider.value),
+    roomId
+  });
+};
+
+// Connect
+connectBtn.onclick=()=>{
+  let r=prompt("Nhập Room ID:");
+  if(r && /^\d{6}$/.test(r)){
+    roomId=r;
+    localStorage.setItem("roomId",r);
+    set(connectionRef,{connected:true, roomId});
+    alert("Đã kết nối!");
   }
 };
 
-// Mute/Volume
-let muteState=false;
-muteBtn.onclick=()=>{ muteState=!muteState; set(commandRef,{mute:muteState,roomId}); muteBtn.textContent=muteState?"🔊 Bật âm thanh":"🔇 Tắt âm thanh"; };
-volumeSlider.oninput=()=>{ set(commandRef,{volume:Number(volumeSlider.value),roomId}); };
-
-// Connect/Disconnect
-connectBtn.onclick=()=>{ let room=prompt("Nhập Room ID (6 số) để kết nối:"); if(!room||!/^\d{6}$/.test(room)){alert("Phải nhập đúng Room ID 6 số!"); return;} localStorage.setItem("roomId",room); roomId=room; set(connectionRef,{connected:true,roomId}).then(()=>alert("✅ Đã kết nối Room: "+room)); };
-disconnectBtn.onclick=()=>{ let room=localStorage.getItem("roomId"); if(!room){alert("Chưa có Room nào kết nối!"); return;} set(connectionRef,{connected:false,roomId:""}).then(()=>{localStorage.removeItem("roomId"); alert("❌ Đã ngắt kết nối Room: "+room);}); };
+// Disconnect
+disconnectBtn.onclick=()=>{
+  set(connectionRef,{connected:false, roomId:""});
+  alert("Đã ngắt kết nối!");
+};
 
 // Reset số bài
-resetBtn.onclick=()=> {
-  if(confirm("Reset số bài đã phát về 0?")){
-    set(commandRef,{resetTotal:true,roomId});
-    statusEl.textContent="♻️ Đã gửi lệnh reset số bài!";
-  }
+resetBtn.onclick=()=>{
+  update(commandRef,{resetTotal:true, roomId});
+  statusEl.textContent="♻️ Đã reset số bài!";
 };
 
-// Sync trạng thái
+// Sync from Screen (mute + volume)
 onValue(commandRef,snapshot=>{
   const cmd=snapshot.val();
   if(!cmd) return;
-  muteBtn.textContent=cmd.mute?"🔊 Bật âm thanh":"🔇 Tắt âm thanh";
-  volumeSlider.value=cmd.volume??100;
+  if(cmd.roomId !== roomId) return;
+
+  if(cmd.mute!==undefined){
+    muteState=cmd.mute;
+    muteBtn.textContent = muteState? "🔊 Bật âm thanh" : "🔇 Tắt âm thanh";
+  }
+  if(cmd.volume!==undefined){
+    volumeSlider.value = cmd.volume;
+  }
 });
 </script>
 </body>
