@@ -20,10 +20,6 @@ button.searchBtn:hover{ background:#e52a2f; }
 .controls button{ flex:1; border-radius:6px; font-size:15px; border:none; background:#ff3b3f; color:#fff; cursor:pointer; }
 .controls button:hover{ background:#e52a2f; }
 #volumeSlider{ flex:2; margin-top:10px; }
-#playlistContainer { margin-top:20px; }
-#playlist .item { justify-content: space-between; display:flex; align-items:center; background:#ffecec; color:#ff3b3f; padding:8px; border-radius:6px; margin-top:5px; }
-#playlist button { margin-left:5px; background:#ff3b3f; border:none; padding:4px 6px; color:#fff; border-radius:4px; cursor:pointer; }
-#playlist button:hover { background:#e52a2f; }
 .item{ display:flex; align-items:center; margin-top:10px; background:#ffecec; color:#ff3b3f; padding:8px; border-radius:6px; cursor:pointer; transition:0.2s; }
 .item:hover{ background:#ffd6d6; }
 .item img{ width:80px; height:60px; object-fit:cover; margin-right:12px; border-radius:6px; }
@@ -34,7 +30,7 @@ button.searchBtn:hover{ background:#e52a2f; }
 
 <div id="topBar">
   <div id="dateTime"></div>
-  <div>Ver Web: 2.0</div>
+  <div>Ver Web: 2.1</div>
   <button id="refreshBtn">🔄 Refresh</button>
 </div>
 
@@ -76,6 +72,7 @@ const firebaseConfig = {
   appId: "1:183555717781:web:d3920b342c5d27e107f99c",
   measurementId: "G-VZ228HB7GF"
 };
+
 const API_KEY = "AIzaSyALYcXF9pG01RbeCx6DaZADNwNro2NKq4I";
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
@@ -99,7 +96,7 @@ const resetBtn=document.getElementById("resetBtn");
 let roomId = localStorage.getItem("roomId") || Math.floor(100000 + Math.random()*900000).toString();
 localStorage.setItem("roomId", roomId);
 
-// Ngày giờ & Refresh
+// Ngày giờ
 const dateTimeEl=document.getElementById("dateTime");
 const refreshBtn=document.getElementById("refreshBtn");
 function updateDateTime(){ const now=new Date(); dateTimeEl.textContent=now.toLocaleString(); }
@@ -135,35 +132,52 @@ async function search(){
 searchBtn.onclick=search;
 qInput.addEventListener("keypress",e=>{if(e.key==="Enter") search();});
 
-// Play & Add
+// Play
 playBtn.onclick=()=>{
   const id = qInput.dataset.selectedId;
   const title = qInput.dataset.selectedTitle;
   if(!id) return alert("Chọn bài trước khi phát!");
   set(commandRef,{id,title,play:true,roomId});
   statusEl.textContent=`▶️ Phát bài: ${title}`;
-}
+};
 
 // Stop
-stopBtn.onclick=()=>{ set(commandRef,{id:"",title:"Intro/Slide",play:false,roomId}); statusEl.textContent="⏹️ Đã dừng phát"; };
+stopBtn.onclick=()=>{
+  set(commandRef,{id:"",title:"",play:false,roomId});
+  statusEl.textContent="⏹️ Dừng phát, trở về màn hình nền";
+};
 
 // Mute/Volume
 let muteState=false;
-muteBtn.onclick=()=>{ muteState=!muteState; set(commandRef,{mute:muteState,roomId}); muteBtn.textContent=muteState?"🔊 Bật âm thanh":"🔇 Tắt âm thanh"; };
+muteBtn.onclick=()=>{ 
+  muteState=!muteState; 
+  set(commandRef,{mute:muteState,roomId}); 
+  muteBtn.textContent=muteState?"🔊 Bật âm thanh":"🔇 Tắt âm thanh"; 
+};
 volumeSlider.oninput=()=>{ set(commandRef,{volume:Number(volumeSlider.value),roomId}); };
 
 // Connect/Disconnect
-connectBtn.onclick=()=>{ let room=prompt("Nhập Room ID (6 số) để kết nối:"); if(!room||!/^\d{6}$/.test(room)){alert("Phải nhập đúng Room ID 6 số!"); return;} localStorage.setItem("roomId",room); roomId=room; set(connectionRef,{connected:true,roomId}).then(()=>alert("✅ Đã kết nối Room: "+room)); };
-disconnectBtn.onclick=()=>{ let room=localStorage.getItem("roomId"); if(!room){alert("Chưa có Room nào kết nối!"); return;} set(connectionRef,{connected:false,roomId:""}).then(()=>{localStorage.removeItem("roomId"); alert("❌ Đã ngắt kết nối Room: "+room);}); };
+connectBtn.onclick=()=>{ 
+  let room=prompt("Nhập Room ID (6 số) để kết nối:"); 
+  if(!room||!/^\d{6}$/.test(room)){alert("Phải nhập đúng Room ID 6 số!"); return;} 
+  localStorage.setItem("roomId",room); roomId=room; 
+  set(connectionRef,{connected:true,roomId}).then(()=>alert("✅ Đã kết nối Room: "+room)); 
+};
+disconnectBtn.onclick=()=>{ 
+  let room=localStorage.getItem("roomId"); 
+  if(!room){alert("Chưa có Room nào kết nối!"); return;} 
+  set(connectionRef,{connected:false,roomId:""}).then(()=>{localStorage.removeItem("roomId"); alert("❌ Đã ngắt kết nối Room: "+room);}); 
+};
 
-// Reset số bài đã phát
+// Reset đếm số bài
 resetBtn.onclick=()=> {
   if(confirm("Bạn có muốn reset số bài đã phát về 0 không?")){
     set(commandRef,{resetTotal:true,roomId});
+    statusEl.textContent="♻️ Đã reset số bài về 0";
   }
-}
+};
 
-// Listen command changes
+// Listen trạng thái âm lượng
 onValue(commandRef,snapshot=>{
   const cmd = snapshot.val();
   if(!cmd) return;
