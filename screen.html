@@ -88,12 +88,10 @@ function setCommand(id,title){
     titleEl.style.display='none';
     background.style.display='block';
   } else {
-    // Ẩn background ngay khi remote bấm play
     background.style.display='none';
     playerIframe.style.display='block';
     titleEl.style.display='block';
     titleSpan.textContent = title;
-
     playerIframe.src = `https://www.youtube.com/embed/${id}?autoplay=1&controls=0&modestbranding=1&rel=0&fs=0&enablejsapi=1`;
   }
 }
@@ -103,12 +101,27 @@ onValue(commandRef, snapshot=>{
   const cmd = snapshot.val();
   if(!cmd) return;
   if(cmd.roomId === roomId){ // Chỉ remote đúng Room ID mới điều khiển
-    if(cmd.id !== currentVideoId) setCommand(cmd.id,cmd.title);
-    if(cmd.play===false) playerIframe.contentWindow.postMessage('{"event":"command","func":"pauseVideo","args":""}','*');
-    else if(cmd.play===true) playerIframe.contentWindow.postMessage('{"event":"command","func":"playVideo","args":""}','*');
+    
+    // Luôn ẩn background khi lệnh play
+    if(cmd.play === true){
+      background.style.display='none';
+      playerIframe.style.display='block';
+      titleEl.style.display='block';
+      if(cmd.title) titleSpan.textContent = cmd.title;
+
+      if(cmd.id && cmd.id !== currentVideoId){
+        currentVideoId = cmd.id;
+        playerIframe.src = `https://www.youtube.com/embed/${cmd.id}?autoplay=1&controls=0&modestbranding=1&rel=0&fs=0&enablejsapi=1`;
+      }
+    }
+
+    if(cmd.play===false){
+      playerIframe.contentWindow.postMessage('{"event":"command","func":"pauseVideo","args":""}','*');
+    }
     if(cmd.mute===true) playerIframe.contentWindow.postMessage('{"event":"command","func":"mute","args":""}','*');
     else if(cmd.mute===false) playerIframe.contentWindow.postMessage('{"event":"command","func":"unMute","args":""}','*');
     if(cmd.volume!==undefined) playerIframe.contentWindow.postMessage(`{"event":"command","func":"setVolume","args":[${cmd.volume}]}`,'*');
+
     // Cập nhật trạng thái Room
     set(connectionRef, { connected:true, roomId });
   }
