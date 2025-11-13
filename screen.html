@@ -5,32 +5,13 @@
 <title>Karaoke Screen</title>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <style>
-html, body { margin:0; height:100%; background:#000; overflow:hidden; font-family:sans-serif; color:#fff; }
-
-/* Ảnh nền cố định */
-#background {
-  position:absolute;
-  top:0; left:0; width:100%; height:100%;
-  background: url('background.png') no-repeat center center;
-  background-size: contain; /* fit vừa màn hình */
-  z-index:0;
-}
-
-#player { 
-  position:absolute; top:0; left:0; width:100%; height:100%; border:none; display:none; z-index:1; 
-}
-
-#title { 
-  position:absolute; bottom:20px; left:0; width:100%; color:#fff; text-shadow:0 0 15px #000; 
-  font-weight:bold; font-size:28px; white-space:nowrap; overflow:hidden; display:none; z-index:2;
-}
+html, body { margin:0; height:100%; overflow:hidden; font-family:sans-serif; background:#000; color:#fff; }
+#background { position:absolute; top:0; left:0; width:100%; height:100%; background: url('background.png') no-repeat center center; background-size:contain; z-index:0; }
+#player { position:absolute; top:0; left:0; width:100%; height:100%; border:none; display:none; z-index:1; }
+#title { position:absolute; bottom:20px; left:0; width:100%; font-weight:bold; font-size:28px; color:#fff; white-space:nowrap; overflow:hidden; text-shadow:0 0 15px #000; display:none; z-index:2; }
 #title span { display:inline-block; padding-left:100%; animation: scrollText 15s linear infinite; }
-@keyframes scrollText { 0% { transform: translateX(0%); } 100% { transform: translateX(-100%); } }
-
-#connectionStatus {
-  position:absolute; top:10px; left:10px; font-size:28px; font-weight:bold;
-  color:#ff3b3f; text-shadow:0 0 8px #000; z-index:3;
-}
+@keyframes scrollText { 0%{transform:translateX(0%);} 100%{transform:translateX(-100%);} }
+#connectionStatus { position:absolute; top:10px; left:10px; font-size:28px; font-weight:bold; text-shadow:0 0 8px #000; z-index:3; }
 .connected { color:#0f0; }
 .disconnected { color:#ff3b3f; }
 </style>
@@ -46,23 +27,23 @@ html, body { margin:0; height:100%; background:#000; overflow:hidden; font-famil
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
 import { getDatabase, ref, onValue, set } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-database.js";
 
-// --- Firebase ---
+// Firebase
 const firebaseConfig = {
-    apiKey: "AIzaSyC1JW_dg-YChaizarbS-7UUN3njFomMPvI",
-    authDomain: "karaokeweb-d414b.firebaseapp.com",
-    databaseURL: "https://karaokeweb-d414b-default-rtdb.asia-southeast1.firebasedatabase.app",
-    projectId: "karaokeweb-d414b",
-    storageBucket: "karaokeweb-d414b.appspot.com",
-    messagingSenderId: "183555717781",
-    appId: "1:183555717781:web:d3920b342c5d27e107f99c",
-    measurementId: "G-VZ228HB7GF"
+  apiKey: "AIzaSyC1JW_dg-YChaizarbS-7UUN3njFomMPvI",
+  authDomain: "karaokeweb-d414b.firebaseapp.com",
+  databaseURL: "https://karaokeweb-d414b-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "karaokeweb-d414b",
+  storageBucket: "karaokeweb-d414b.appspot.com",
+  messagingSenderId: "183555717781",
+  appId: "1:183555717781:web:d3920b342c5d27e107f99c",
+  measurementId: "G-VZ228HB7GF"
 };
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 const commandRef = ref(db,"command");
 const connectionRef = ref(db,"connectionStatus");
 
-// --- DOM ---
+// DOM
 const playerIframe = document.getElementById("player");
 const titleEl = document.getElementById("title");
 const titleSpan = titleEl.querySelector("span");
@@ -70,17 +51,11 @@ const connectionStatusEl = document.getElementById("connectionStatus");
 const background = document.getElementById("background");
 
 let currentVideoId = null;
+let roomId = localStorage.getItem("roomId") || Math.floor(100000 + Math.random()*900000).toString();
+localStorage.setItem("roomId", roomId);
+set(connectionRef,{connected:false, roomId});
 
-// --- Tạo Room ID ngẫu nhiên 6 số ---
-function generateRoomId() {
-  return Math.floor(100000 + Math.random()*900000).toString();
-}
-
-// --- Khởi tạo Room ID ---
-let roomId = generateRoomId();
-set(connectionRef, { connected:false, roomId });
-
-// --- Hiển thị bài hát ---
+// Set command: play/pause video
 function setCommand(id,title){
   currentVideoId=id;
   if(!id){
@@ -88,47 +63,31 @@ function setCommand(id,title){
     titleEl.style.display='none';
     background.style.display='block';
   } else {
+    playerIframe.src = `https://www.youtube.com/embed/${id}?autoplay=1&controls=0&modestbranding=1&rel=0&fs=0&enablejsapi=1`;
     background.style.display='none';
     playerIframe.style.display='block';
     titleEl.style.display='block';
     titleSpan.textContent = title;
-    playerIframe.src = `https://www.youtube.com/embed/${id}?autoplay=1&controls=0&modestbranding=1&rel=0&fs=0&enablejsapi=1`;
   }
 }
 
-// --- Lắng nghe Remote ---
-onValue(commandRef, snapshot=>{
+// Listen Remote
+onValue(commandRef,snapshot=>{
   const cmd = snapshot.val();
   if(!cmd) return;
-  if(cmd.roomId === roomId){ // Chỉ remote đúng Room ID mới điều khiển
-    
-    // Luôn ẩn background khi lệnh play
-    if(cmd.play === true){
-      background.style.display='none';
-      playerIframe.style.display='block';
-      titleEl.style.display='block';
-      if(cmd.title) titleSpan.textContent = cmd.title;
-
-      if(cmd.id && cmd.id !== currentVideoId){
-        currentVideoId = cmd.id;
-        playerIframe.src = `https://www.youtube.com/embed/${cmd.id}?autoplay=1&controls=0&modestbranding=1&rel=0&fs=0&enablejsapi=1`;
-      }
-    }
-
-    if(cmd.play===false){
-      playerIframe.contentWindow.postMessage('{"event":"command","func":"pauseVideo","args":""}','*');
-    }
+  if(cmd.roomId === roomId){
+    if(cmd.id !== currentVideoId) setCommand(cmd.id,cmd.title);
+    if(cmd.play===false) playerIframe.contentWindow.postMessage('{"event":"command","func":"pauseVideo","args":""}','*');
+    else if(cmd.play===true) playerIframe.contentWindow.postMessage('{"event":"command","func":"playVideo","args":""}','*');
     if(cmd.mute===true) playerIframe.contentWindow.postMessage('{"event":"command","func":"mute","args":""}','*');
     else if(cmd.mute===false) playerIframe.contentWindow.postMessage('{"event":"command","func":"unMute","args":""}','*');
     if(cmd.volume!==undefined) playerIframe.contentWindow.postMessage(`{"event":"command","func":"setVolume","args":[${cmd.volume}]}`,'*');
-
-    // Cập nhật trạng thái Room
-    set(connectionRef, { connected:true, roomId });
+    set(connectionRef,{connected:true, roomId});
   }
 });
 
-// --- Lắng nghe trạng thái Room ---
-onValue(connectionRef, snapshot=>{
+// Listen Room status
+onValue(connectionRef,snapshot=>{
   const data = snapshot.val();
   if(data?.connected){
     connectionStatusEl.textContent = `✅ Room: ${data.roomId} (OK)`;
@@ -141,13 +100,13 @@ onValue(connectionRef, snapshot=>{
   }
 });
 
-// --- YouTube IFrame API ---
+// Load YouTube IFrame API
 let tag=document.createElement('script');
 tag.src="https://www.youtube.com/iframe_api";
 document.body.appendChild(tag);
-function onYouTubeIframeAPIReady() {
-  window.player = new YT.Player('player',{
-    events:{'onReady':()=>{}, 'onStateChange': e=>{ if(e.data===0) {} }}
+function onYouTubeIframeAPIReady(){
+  window.player=new YT.Player('player',{
+    events:{'onReady':()=>{},'onStateChange': e=>{} }
   });
 }
 </script>
