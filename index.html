@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<title>Karaoke Web - Index</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  html, body { margin:0; padding:0; height:100%; display:flex; flex-direction:column; justify-content:center; align-items:center; font-family:sans-serif; background:#000; color:#fff; }
+  h1 { font-size:2em; margin-bottom:30px; text-align:center; }
+  .buttons { display:flex; gap:20px; flex-wrap:wrap; justify-content:center; }
+  button { padding:15px 30px; font-size:18px; font-weight:bold; border:none; border-radius:8px; cursor:pointer; background:#ff3b3f; color:#fff; transition:0.2s; }
+  button:hover { background:#e52a2f; }
+</style>
+</head>
+<body>
+
+<h1>🎤 Chào mừng đến với Karaoke Web!</h1>
+
+<div class="buttons">
+  <button id="screenBtn">Mở Screen</button>
+  <button id="remoteBtn">Mở Remote</button>
+</div>
+
+<script>
+  // Hàm nhận diện thiết bị
+  function isAndroidTV() {
+    return /Android TV|SmartTV|GoogleTV/i.test(navigator.userAgent);
+  }
+  function isMobile() {
+    return /Android|iPhone|iPod/i.test(navigator.userAgent);
+  }
+  function isTablet() {
+    return /iPad|Tablet/i.test(navigator.userAgent);
+  }
+
+  const screenBtn = document.getElementById('screenBtn');
+  const remoteBtn = document.getElementById('remoteBtn');
+
+  // Nút Screen
+  screenBtn.onclick = () => {
+    window.location.href = '/screen.html';
+  };
+
+  // Nút Remote
+  remoteBtn.onclick = () => {
+    window.location.href = '/remote.html';
+  };
+
+  // Xử lý tự động chuyển hướng
+  window.addEventListener('load', () => {
+    if(isAndroidTV()) {
+      // Android TV → tự chuyển thẳng
+      window.location.href = '/screen.html';
+    } else if(!isMobile() && !isTablet()) {
+      // PC/Laptop → hỏi xác nhận trước
+      if(confirm('Bạn có muốn mở màn hình Screen không?')) {
+        window.location.href = '/screen.html';
+      }
+    }
+    // Mobile/Tablet → không tự chuyển, chỉ bấm Remote
+  });
+</script>
+
+</body>
+</html>
