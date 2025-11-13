@@ -6,28 +6,36 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <style>
 html, body { margin:0; height:100%; overflow:hidden; font-family:sans-serif; background:#000; color:#fff; }
-#background { position:absolute; top:0; left:0; width:100%; height:100%; background: url('background.png') no-repeat center center; background-size:contain; z-index:0; }
-#player { position:absolute; top:0; left:0; width:100%; height:100%; border:none; display:none; z-index:1; }
-#titlePopup { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); background:rgba(0,0,0,0.7); padding:20px 30px; border-radius:10px; font-size:32px; font-weight:bold; display:none; z-index:2; text-align:center; }
-#connectionStatus { position:absolute; top:10px; left:10px; font-size:28px; font-weight:bold; text-shadow:0 0 8px #000; z-index:3; }
-.connected { color:#0f0; }
-.disconnected { color:#ff3b3f; }
-#totalPlayed { position:absolute; top:10px; right:10px; font-size:24px; background:rgba(0,0,0,0.5); padding:5px 10px; border-radius:6px; z-index:4; }
+#background { position:absolute; top:0; left:0; width:100%; height:100%; background: url('background.png') no-repeat center center; background-size:contain; z-index:0; transition: opacity 1s ease; }
+#player { position:absolute; top:0; left:0; width:100%; height:100%; border:none; display:none; z-index:1; transition: opacity 1s ease; }
+#titlePopup {
+  position:absolute;
+  bottom:50px; left:50%; transform:translateX(-50%);
+  background:rgba(0,0,0,0.7); padding:15px 20px;
+  font-size:28px; font-weight:bold; border-radius:10px;
+  opacity:0; pointer-events:none; transition:opacity 1s ease;
+  z-index:2;
+}
+#totalCount {
+  position:absolute; top:20px; right:20px;
+  font-size:24px; font-weight:bold;
+  background:rgba(0,0,0,0.5); padding:8px 12px; border-radius:8px;
+  z-index:2;
+  opacity:0; transition:opacity 1s ease;
+}
 </style>
 </head>
 <body>
 
-<div id="connectionStatus">Room ID: ——— (Chưa kết nối)</div>
 <div id="background"></div>
 <iframe id="player" allowfullscreen allow="autoplay"></iframe>
 <div id="titlePopup"></div>
-<div id="totalPlayed">🎵 Đã phát: 0</div>
+<div id="totalCount">🎵 0 bài đã hát</div>
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
 import { getDatabase, ref, onValue, set } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-database.js";
 
-// Firebase
 const firebaseConfig = {
   apiKey: "AIzaSyC1JW_dg-YChaizarbS-7UUN3njFomMPvI",
   authDomain: "karaokeweb-d414b.firebaseapp.com",
@@ -41,95 +49,56 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 const commandRef = ref(db,"command");
-const connectionRef = ref(db,"connectionStatus");
-const totalPlayedRef = ref(db,"totalPlayed");
 
-let roomId = localStorage.getItem("roomId") || Math.floor(100000 + Math.random()*900000).toString();
-localStorage.setItem("roomId", roomId);
-set(connectionRef,{connected:false, roomId});
-
-// DOM
-const playerIframe = document.getElementById("player");
-const titlePopup = document.getElementById("titlePopup");
-const connectionStatusEl = document.getElementById("connectionStatus");
+const player = document.getElementById("player");
 const background = document.getElementById("background");
-const totalPlayedEl = document.getElementById("totalPlayed");
+const titlePopup = document.getElementById("titlePopup");
+const totalCountEl = document.getElementById("totalCount");
 
-let currentVideoId = null;
-let totalPlayed = 0;
+let totalCount = 0;
+let fadeTimeout = null;
 
-// Load tổng số bài đã phát từ Firebase
-onValue(totalPlayedRef, snapshot => {
-  totalPlayed = snapshot.val() || 0;
-  totalPlayedEl.textContent = `🎵 Đã phát: ${totalPlayed}`;
-});
-
-// Hiển thị pop-up bài đang phát
-function showPopup(title){
-  titlePopup.textContent = title;
-  titlePopup.style.display='block';
-  setTimeout(()=>{ titlePopup.style.display='none'; },5000);
+function showTitlePopup(text){
+  titlePopup.textContent = text;
+  titlePopup.style.opacity = 1;
+  if(fadeTimeout) clearTimeout(fadeTimeout);
+  fadeTimeout = setTimeout(()=>{ titlePopup.style.opacity = 0; },4000);
 }
 
-// Set video
-function setCommand(id,title){
-  currentVideoId=id;
-  if(!id){
-    playerIframe.style.display='none';
-    background.style.display='block';
-  } else {
-    playerIframe.src = `https://www.youtube.com/embed/${id}?autoplay=1&controls=0&modestbranding=1&rel=0&fs=0&enablejsapi=1`;
-    background.style.display='none';
-    playerIframe.style.display='block';
-    showPopup(title);
-    totalPlayed++;
-    totalPlayedEl.textContent = `🎵 Đã phát: ${totalPlayed}`;
-    set(totalPlayedRef,totalPlayed);
-  }
+function updateTotalCount(){
+  totalCountEl.textContent = `🎵 ${totalCount} bài đã hát`;
+  totalCountEl.style.opacity = 1;
+  setTimeout(()=>{ totalCountEl.style.opacity = 0.7; },1500);
 }
 
-// Listen Remote commands
-onValue(commandRef,snapshot=>{
+// Listen commands
+onValue(commandRef, snapshot => {
   const cmd = snapshot.val();
   if(!cmd) return;
-  if(cmd.roomId===roomId){
-    if(cmd.id!==currentVideoId){
-      if(cmd.id) setCommand(cmd.id,cmd.title);
-      else setCommand(null);
-    }
 
-    if(cmd.resetTotal){ // reset số bài
-      totalPlayed = 0;
-      totalPlayedEl.textContent = `🎵 Đã phát: ${totalPlayed}`;
-      set(totalPlayedRef,totalPlayed);
-    }
-
-    if(cmd.play!==undefined){
-      playerIframe.contentWindow.postMessage(`{"event":"command","func":"${cmd.play? "playVideo":"pauseVideo"}","args":""}`,'*');
-    }
-    if(cmd.mute!==undefined){
-      playerIframe.contentWindow.postMessage(`{"event":"command","func":"${cmd.mute? "mute":"unMute"},"args":""}`,'*');
-    }
-    if(cmd.volume!==undefined){
-      playerIframe.contentWindow.postMessage(`{"event":"command","func":"setVolume","args":[${cmd.volume}]}`,'*');
-    }
-
-    set(connectionRef,{connected:true, roomId});
+  if(cmd.resetTotal){
+    totalCount = 0;
+    updateTotalCount();
+    return;
   }
-});
 
-// Listen Room status
-onValue(connectionRef,snapshot=>{
-  const data = snapshot.val();
-  if(data?.connected){
-    connectionStatusEl.textContent = `✅ Room: ${data.roomId} (OK)`;
-    connectionStatusEl.classList.add("connected");
-    connectionStatusEl.classList.remove("disconnected");
-  } else {
-    connectionStatusEl.textContent = `Room ID: ${roomId} (Chưa kết nối)`;
-    connectionStatusEl.classList.add("disconnected");
-    connectionStatusEl.classList.remove("connected");
+  if(!cmd.id){ // dừng phát
+    player.style.opacity = 0;
+    setTimeout(()=>player.style.display='none',1000);
+    background.style.opacity = 1;
+    showTitlePopup("🎬 Kết thúc bài hát / Intro");
+    return;
   }
+
+  // Phát bài mới
+  player.src = `https://www.youtube.com/embed/${cmd.id}?autoplay=1&controls=0&modestbranding=1&rel=0&fs=0&enablejsapi=1`;
+  background.style.opacity = 0;
+  player.style.display = 'block';
+  setTimeout(()=>{ player.style.opacity = 1; },50);
+
+  totalCount += 1;
+  updateTotalCount();
+  showTitlePopup(`▶️ Đang phát: ${cmd.title}`);
 });
 
 // Load YouTube IFrame API
@@ -137,12 +106,8 @@ let tag=document.createElement('script');
 tag.src="https://www.youtube.com/iframe_api";
 document.body.appendChild(tag);
 function onYouTubeIframeAPIReady(){
-  window.player=new YT.Player('player',{
-    events:{'onReady':()=>{},'onStateChange': e=>{
-      if(e.data===YT.PlayerState.ENDED){
-        setCommand(null);
-      }
-    }}
+  window.ytPlayer=new YT.Player('player',{
+    events:{'onReady':()=>{},'onStateChange': e=>{} }
   });
 }
 </script>
