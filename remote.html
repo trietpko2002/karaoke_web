@@ -137,6 +137,7 @@ async function addToPlaylist(video){
   statusEl.textContent=`✅ Thêm vào Playlist: ${video.title}`;
 }
 
+// Các hàm window để truy cập từ HTML
 window.removeFromPlaylist = async function(index){
   const snapshot = await get(playlistRef);
   const list = snapshot.val() || [];
@@ -183,9 +184,8 @@ async function search(){
       el.className="item";
       el.innerHTML=`<img src="${v.snippet.thumbnails.medium.url}"><div class="title">${v.snippet.title}</div>`;
       el.onclick=()=>{ 
-        set(commandRef,{id:v.id.videoId,title:v.snippet.title,play:true,mute:muteState,roomId}); 
         addToPlaylist({id:v.id.videoId,title:v.snippet.title});
-        statusEl.textContent="▶️ Đang phát: "+v.snippet.title; 
+        statusEl.textContent=`✅ Thêm vào Playlist: ${v.snippet.title}`;
       };
       listEl.appendChild(el);
     });
