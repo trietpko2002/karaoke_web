@@ -132,9 +132,10 @@ function renderPlaylist(list){
 }
 
 async function addToPlaylist(video){
+  // Chỉ thêm vào playlist, không phát
   const newRef = push(playlistRef);
   await set(newRef, {id: video.id, title: video.title});
-  statusEl.textContent=`✅ Thêm vào Playlist: ${video.title}`;
+  statusEl.textContent=`✅ Đã thêm vào Playlist: ${video.title}`;
 }
 
 // Các hàm window để truy cập từ HTML
@@ -155,7 +156,6 @@ window.prioritize = async function(index){
     const temp = list[key1];
     list[key1] = list[key0];
     list[key0] = temp;
-    // overwrite
     keys.forEach(k=> set(ref(db,"playlist/"+roomId+"/"+k), list[k]));
   }
 }
@@ -184,8 +184,7 @@ async function search(){
       el.className="item";
       el.innerHTML=`<img src="${v.snippet.thumbnails.medium.url}"><div class="title">${v.snippet.title}</div>`;
       el.onclick=()=>{ 
-        addToPlaylist({id:v.id.videoId,title:v.snippet.title});
-        statusEl.textContent=`✅ Thêm vào Playlist: ${v.snippet.title}`;
+        addToPlaylist({id:v.id.videoId,title:v.snippet.title}); // Chỉ thêm, không phát
       };
       listEl.appendChild(el);
     });
