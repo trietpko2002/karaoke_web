@@ -61,13 +61,23 @@ let roomId = localStorage.getItem("roomId") || Math.floor(100000 + Math.random()
 localStorage.setItem("roomId", roomId);
 set(connectionRef,{connected:false, roomId});
 
-// Reset screen 1 lần
+// Reset screen hoàn toàn
 let resetHandled=false;
 onValue(resetRef,snapshot=>{
   if(snapshot.val()===true && !resetHandled){
     resetHandled=true;
-    location.reload();
+
+    // Ẩn iframe, hiện background, xóa video
+    currentVideoId = null;
+    playerIframe.src = '';
+    playerIframe.style.display='none';
+    background.style.display='block';
+
+    // Reset Firebase về false
     set(resetRef,false);
+
+    // Cho phép reset tiếp theo
+    setTimeout(()=>{ resetHandled=false; }, 500);
   }
 });
 
