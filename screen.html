@@ -5,23 +5,61 @@
 <title>Karaoke Screen</title>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <style>
-html, body { margin:0; height:100%; overflow:hidden; font-family:sans-serif; background:#000; color:#fff; }
-#background { position:absolute; top:0; left:0; width:100%; height:100%; background: url('background.png') no-repeat center center; background-size:contain; z-index:0; transition: opacity 1s ease; }
-#player { position:absolute; top:0; left:0; width:100%; height:100%; border:none; display:none; z-index:1; transition: opacity 1s ease; }
+html, body {
+  margin: 0;
+  height: 100%;
+  background: #000;
+  overflow: hidden;
+  color: #fff;
+  font-family: sans-serif;
+}
+#background {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  background: url('background.png') no-repeat center center;
+  background-size: contain;
+  z-index: 0;
+  opacity: 1;
+  transition: opacity 1s ease;
+}
+#player {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  border: none;
+  display: none;
+  opacity: 0;
+  z-index: 1;
+  transition: opacity 1s ease;
+}
 #titlePopup {
-  position:absolute;
-  bottom:50px; left:50%; transform:translateX(-50%);
-  background:rgba(0,0,0,0.7); padding:15px 20px;
-  font-size:28px; font-weight:bold; border-radius:10px;
-  opacity:0; pointer-events:none; transition:opacity 1s ease;
-  z-index:2;
+  position: absolute;
+  bottom: 50px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0,0,0,0.7);
+  padding: 15px 20px;
+  font-size: 28px;
+  font-weight: bold;
+  border-radius: 10px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 1s ease;
+  z-index: 2;
 }
 #totalCount {
-  position:absolute; top:20px; right:20px;
-  font-size:24px; font-weight:bold;
-  background:rgba(0,0,0,0.5); padding:8px 12px; border-radius:8px;
-  z-index:2;
-  opacity:0; transition:opacity 1s ease;
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  font-size: 24px;
+  font-weight: bold;
+  background: rgba(0,0,0,0.5);
+  padding: 8px 12px;
+  border-radius: 8px;
+  z-index: 2;
+  opacity: 0;
+  transition: opacity 1s ease;
 }
 </style>
 </head>
@@ -48,7 +86,7 @@ const firebaseConfig = {
 };
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
-const commandRef = ref(db,"command");
+const commandRef = ref(db, "command");
 
 const player = document.getElementById("player");
 const background = document.getElementById("background");
@@ -58,58 +96,74 @@ const totalCountEl = document.getElementById("totalCount");
 let totalCount = 0;
 let fadeTimeout = null;
 
-function showTitlePopup(text){
+function showTitlePopup(text) {
   titlePopup.textContent = text;
   titlePopup.style.opacity = 1;
-  if(fadeTimeout) clearTimeout(fadeTimeout);
-  fadeTimeout = setTimeout(()=>{ titlePopup.style.opacity = 0; },4000);
+  if (fadeTimeout) clearTimeout(fadeTimeout);
+  fadeTimeout = setTimeout(() => { titlePopup.style.opacity = 0; }, 4000);
 }
 
-function updateTotalCount(){
+function updateTotalCount() {
   totalCountEl.textContent = `🎵 ${totalCount} bài đã hát`;
   totalCountEl.style.opacity = 1;
-  setTimeout(()=>{ totalCountEl.style.opacity = 0.7; },1500);
+  setTimeout(() => { totalCountEl.style.opacity = 0.8; }, 1500);
 }
 
-// Listen commands
+// Theo dõi lệnh từ Remote
 onValue(commandRef, snapshot => {
   const cmd = snapshot.val();
-  if(!cmd) return;
+  if (!cmd) return;
 
-  if(cmd.resetTotal){
+  if (cmd.resetTotal) {
     totalCount = 0;
     updateTotalCount();
+    showTitlePopup("🔁 Đã reset bộ đếm");
     return;
   }
 
-  if(!cmd.id){ // dừng phát
+  if (!cmd.id) { // Dừng phát
     player.style.opacity = 0;
-    setTimeout(()=>player.style.display='none',1000);
-    background.style.opacity = 1;
-    showTitlePopup("🎬 Kết thúc bài hát / Intro");
+    setTimeout(() => {
+      player.style.display = 'none';
+      background.style.opacity = 1;
+    }, 1000);
+    showTitlePopup("⏹️ Kết thúc bài hát / Intro");
     return;
   }
 
   // Phát bài mới
   player.src = `https://www.youtube.com/embed/${cmd.id}?autoplay=1&controls=0&modestbranding=1&rel=0&fs=0&enablejsapi=1`;
-  background.style.opacity = 0;
   player.style.display = 'block';
-  setTimeout(()=>{ player.style.opacity = 1; },50);
+  background.style.opacity = 0;
+  setTimeout(() => { player.style.opacity = 1; }, 50);
 
   totalCount += 1;
   updateTotalCount();
-  showTitlePopup(`▶️ Đang phát: ${cmd.title}`);
+  showTitlePopup(`🎶 Đang phát: ${cmd.title}`);
 });
 
-// Load YouTube IFrame API
-let tag=document.createElement('script');
-tag.src="https://www.youtube.com/iframe_api";
+// Load YouTube API
+let tag = document.createElement('script');
+tag.src = "https://www.youtube.com/iframe_api";
 document.body.appendChild(tag);
-function onYouTubeIframeAPIReady(){
-  window.ytPlayer=new YT.Player('player',{
-    events:{'onReady':()=>{},'onStateChange': e=>{} }
+
+window.onYouTubeIframeAPIReady = () => {
+  window.ytPlayer = new YT.Player('player', {
+    events: {
+      'onStateChange': e => {
+        if (e.data === YT.PlayerState.ENDED) {
+          // Khi video kết thúc thì fade về background
+          player.style.opacity = 0;
+          setTimeout(() => {
+            player.style.display = 'none';
+            background.style.opacity = 1;
+            showTitlePopup("🎬 Bài hát đã kết thúc");
+          }, 1000);
+        }
+      }
+    }
   });
-}
+};
 </script>
 </body>
 </html>
