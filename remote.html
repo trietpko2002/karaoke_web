@@ -19,11 +19,16 @@ button.searchBtn:hover{ background:#e52a2f; }
 .item:hover{ background:#ffd6d6; }
 .item img{ width:80px; height:60px; object-fit:cover; margin-right:12px; border-radius:6px; }
 .title{ font-size:0.95em; line-height:1.2em; flex:1; color:#ff3b3f; }
+.playlist{ margin-top:15px; }
+.playlist-item{ display:flex; align-items:center; justify-content:space-between; margin-top:8px; background:#fff0f0; padding:6px 8px; border-radius:6px; }
+.playlist-item button{ margin-left:5px; padding:2px 6px; border:none; border-radius:4px; cursor:pointer; font-size:12px; background:#ff3b3f; color:#fff; }
+.playlist-item button:hover{ background:#e52a2f; }
 #status{ margin-top:10px; font-size:0.9em; }
 .controls{ display:flex; gap:10px; margin-top:15px; flex-wrap:wrap; }
 .controls button{ flex:1; border-radius:6px; font-size:15px; border:none; background:#ff3b3f; color:#fff; cursor:pointer; }
 .controls button:hover{ background:#e52a2f; }
 #volumeSlider{ flex:2; margin-top:10px; }
+#notify{ position:absolute; top:10px; left:10px; background:rgba(0,0,0,0.6); color:#0f0; padding:6px 10px; border-radius:6px; font-weight:bold; white-space:nowrap; opacity:0; transition:0.5s; z-index:999; }
 </style>
 </head>
 <body>
@@ -47,6 +52,10 @@ button.searchBtn:hover{ background:#e52a2f; }
   </div>
   <div id="status"></div>
   <div id="list"></div>
+
+  <h2>📃 Playlist</h2>
+  <div class="playlist" id="playlist"></div>
+
   <div class="controls">
     <button id="muteBtn">🔇 Tắt/Bật âm thanh</button>
     <input type="range" min="0" max="100" value="100" id="volumeSlider">
@@ -54,6 +63,8 @@ button.searchBtn:hover{ background:#e52a2f; }
     <button id="disconnectBtn">❌ Ngắt kết nối</button>
   </div>
 </div>
+
+<div id="notify"></div>
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
@@ -86,24 +97,94 @@ const muteBtn=document.getElementById("muteBtn");
 const volumeSlider=document.getElementById("volumeSlider");
 const connectBtn=document.getElementById("connectBtn");
 const disconnectBtn=document.getElementById("disconnectBtn");
-let muteState=false;
+const playlistEl=document.getElementById("playlist");
+const notifyEl=document.getElementById("notify");
 
-// Ngày giờ & Refresh
+let muteState=false;
+let playlist=[];
+let currentIndex=-1;
+
+// --- Notification
+function showNotification(text){
+  notifyEl.textContent=text;
+  notifyEl.style.opacity=1;
+  notifyEl.style.transform="translateX(0)";
+  setTimeout(()=>{ notifyEl.style.opacity=0; notifyEl.style.transform="translateX(-100%)"; },5000);
+}
+
+// --- Ngày giờ & Refresh
 const dateTimeEl=document.getElementById("dateTime");
 const refreshBtn=document.getElementById("refreshBtn");
-function updateDateTime(){ const now=new Date(); dateTimeEl.textContent=now.toLocaleString(); }
+function updateDateTime(){ dateTimeEl.textContent=(new Date()).toLocaleString(); }
 setInterval(updateDateTime,1000);
 updateDateTime();
 refreshBtn.onclick=()=>location.reload();
 
-// Search YouTube
+// --- Render playlist
+function renderPlaylist(){
+  playlistEl.innerHTML="";
+  playlist.forEach((v,i)=>{
+    const el=document.createElement("div");
+    el.className="playlist-item";
+    el.innerHTML=`<span>${v.title}</span>
+                  <div>
+                  <button onclick="playIndex(${i})">▶️</button>
+                  <button onclick="priorityIndex(${i})">⚡</button>
+                  <button onclick="removeIndex(${i})">❌</button>
+                  </div>`;
+    playlistEl.appendChild(el);
+  });
+  updatePlaylistStatus();
+}
+
+// --- Play next
+function playNext(){
+  if(currentIndex+1<playlist.length){
+    currentIndex++;
+    const vid=playlist[currentIndex];
+    set(commandRef,{id:vid.id,title:vid.title,play:true,mute:muteState,roomId:localStorage.getItem("roomId")});
+  }
+  updatePlaylistStatus();
+}
+
+// --- Play specific index
+window.playIndex=(i)=>{
+  currentIndex=i-1; // playNext sẽ +1
+  playNext();
+};
+
+// --- Priority
+window.priorityIndex=(i)=>{
+  if(i>currentIndex){
+    const item=playlist.splice(i,1)[0];
+    playlist.splice(currentIndex+1,0,item);
+    renderPlaylist();
+  }
+};
+
+// --- Remove
+window.removeIndex=(i)=>{
+  playlist.splice(i,1);
+  if(i<=currentIndex) currentIndex--;
+  renderPlaylist();
+};
+
+// --- Update playlist status
+function updatePlaylistStatus(){
+  if(currentIndex<0 || playlist.length===0) return;
+  const remaining=playlist.length-currentIndex-1;
+  statusEl.textContent=`▶️ Đang phát: ${playlist[currentIndex].title} | Còn lại: ${remaining} bài`;
+}
+setInterval(updatePlaylistStatus,60000);
+
+// --- Search YouTube
 async function search(){
   const q=qInput.value.trim();
   const karaokeOnly=document.getElementById("karaokeOnly").checked;
   if(!q) return alert("Nhập từ khóa!");
   listEl.innerHTML=""; statusEl.textContent="🔍 Đang tìm kiếm...";
   try{
-    const res=await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=12&q=${encodeURIComponent(q + (karaokeOnly?" karaoke":""))}&videoEmbeddable=true&key=${API_KEY}`);
+    const res=await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=12&q=${encodeURIComponent(q+(karaokeOnly?" karaoke":""))}&videoEmbeddable=true&key=${API_KEY}`);
     const data=await res.json();
     statusEl.textContent="";
     if(!data.items || data.items.length===0){ statusEl.textContent="Không tìm thấy kết quả."; return; }
@@ -112,7 +193,12 @@ async function search(){
       const el=document.createElement("div");
       el.className="item";
       el.innerHTML=`<img src="${v.snippet.thumbnails.medium.url}"><div class="title">${v.snippet.title}</div>`;
-      el.onclick=()=>{ set(commandRef,{id:v.id.videoId,title:v.snippet.title,play:true,mute:muteState,roomId:localStorage.getItem("roomId")}); statusEl.textContent="▶️ Đang phát: "+v.snippet.title; };
+      el.onclick=()=>{
+        playlist.push({id:v.id.videoId,title:v.snippet.title});
+        renderPlaylist();
+        showNotification("Đã thêm: "+v.snippet.title);
+        if(currentIndex===-1) playNext();
+      };
       listEl.appendChild(el);
     });
   }catch(err){ console.error(err); statusEl.textContent="⚠️ Lỗi khi tìm kiếm!"; }
@@ -120,17 +206,18 @@ async function search(){
 searchBtn.onclick=search;
 qInput.addEventListener("keypress",e=>{if(e.key==="Enter") search();});
 
-// Controls
-stopBtn.onclick=()=>{ set(commandRef,{id:"",title:"Intro / Slide",play:false,mute:muteState,roomId:localStorage.getItem("roomId")}); statusEl.textContent="⏹️ Đã dừng phát"; };
+// --- Controls
+stopBtn.onclick=()=>{ set(commandRef,{id:"",title:"Intro / Slide",play:false,mute:muteState,roomId:localStorage.getItem("roomId")); currentIndex=-1; };
 muteBtn.onclick=()=>{ muteState=!muteState; set(commandRef,{mute:muteState,roomId:localStorage.getItem("roomId")}); muteBtn.textContent=muteState?"🔊 Bật âm thanh":"🔇 Tắt âm thanh"; };
 volumeSlider.oninput=()=>{ set(commandRef,{volume:Number(volumeSlider.value),roomId:localStorage.getItem("roomId")}); };
 
-// Connect / Disconnect
+// --- Connect / Disconnect
 connectBtn.onclick=()=>{ let room=prompt("Nhập Room ID (6 số) để kết nối:"); if(!room||!/^\d{6}$/.test(room)){alert("Phải nhập đúng Room ID 6 số!"); return;} localStorage.setItem("roomId",room); set(connectionRef,{connected:true,roomId:room}).then(()=>alert("✅ Đã kết nối Room: "+room)); };
 disconnectBtn.onclick=()=>{ let room=localStorage.getItem("roomId"); if(!room){alert("Chưa có Room nào kết nối!"); return;} set(connectionRef,{connected:false,roomId:""}).then(()=>{localStorage.removeItem("roomId"); alert("❌ Đã ngắt kết nối Room: "+room);}); };
 
-// Update command from Screen
+// --- Update command from Screen
 onValue(commandRef,snapshot=>{ const cmd=snapshot.val(); if(!cmd) return; muteBtn.textContent=cmd.mute?"🔊 Bật âm thanh":"🔇 Tắt âm thanh"; volumeSlider.value=cmd.volume??100; });
+
 </script>
 </body>
 </html>
