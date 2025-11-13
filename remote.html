@@ -15,22 +15,26 @@ h2{ margin-bottom:15px; color:#ff3b3f; border-bottom:2px solid #ff3b3f; padding-
 input{ flex:1; padding:10px; border:2px solid #ff3b3f; border-radius:5px 0 0 5px; font-size:16px; outline:none; }
 button.searchBtn{ padding:10px 14px; border:none; background:#ff3b3f; color:white; border-radius:0 5px 5px 0; cursor:pointer; font-weight:bold; }
 button.searchBtn:hover{ background:#e52a2f; }
-.item{ display:flex; align-items:center; margin-top:10px; background:#ffecec; color:#ff3b3f; padding:8px; border-radius:6px; transition:0.2s; }
-.item:hover{ background:#ffd6d6; }
-.item img{ width:80px; height:60px; object-fit:cover; margin-right:12px; border-radius:6px; }
-.title{ font-size:0.95em; line-height:1.2em; flex:1; color:#ff3b3f; }
 #status{ margin-top:10px; font-size:0.9em; }
 .controls{ display:flex; gap:10px; margin-top:15px; flex-wrap:wrap; }
 .controls button{ flex:1; border-radius:6px; font-size:15px; border:none; background:#ff3b3f; color:#fff; cursor:pointer; }
 .controls button:hover{ background:#e52a2f; }
 #volumeSlider{ flex:2; margin-top:10px; }
+#playlistContainer { margin-top:20px; }
+#playlist .item { justify-content: space-between; display:flex; align-items:center; background:#ffecec; color:#ff3b3f; padding:8px; border-radius:6px; margin-top:5px; }
+#playlist button { margin-left:5px; background:#ff3b3f; border:none; padding:4px 6px; color:#fff; border-radius:4px; cursor:pointer; }
+#playlist button:hover { background:#e52a2f; }
+.item{ display:flex; align-items:center; margin-top:10px; background:#ffecec; color:#ff3b3f; padding:8px; border-radius:6px; cursor:pointer; transition:0.2s; }
+.item:hover{ background:#ffd6d6; }
+.item img{ width:80px; height:60px; object-fit:cover; margin-right:12px; border-radius:6px; }
+.title{ font-size:0.95em; line-height:1.2em; flex:1; color:#ff3b3f; }
 </style>
 </head>
 <body>
 
 <div id="topBar">
   <div id="dateTime"></div>
-  <div>Ver Web: 1.0</div>
+  <div>Ver Web: 2.0</div>
   <button id="refreshBtn">🔄 Refresh</button>
 </div>
 
@@ -39,6 +43,7 @@ button.searchBtn:hover{ background:#e52a2f; }
   <div class="search-bar">
     <input id="q" placeholder="Nhập từ khóa..." />
     <button class="searchBtn" id="searchBtn">🔍</button>
+    <button id="playBtn">▶️ Phát & Thêm</button>
     <button id="stopBtn">⏹️ Dừng</button>
   </div>
   <div style="margin-top:10px;">
@@ -53,6 +58,7 @@ button.searchBtn:hover{ background:#e52a2f; }
     <input type="range" min="0" max="100" value="100" id="volumeSlider">
     <button id="connectBtn">🔗 Kết nối Room</button>
     <button id="disconnectBtn">❌ Ngắt kết nối</button>
+    <button id="resetBtn">♻️ Reset số bài</button>
   </div>
 </div>
 
@@ -71,7 +77,6 @@ const firebaseConfig = {
   measurementId: "G-VZ228HB7GF"
 };
 const API_KEY = "AIzaSyALYcXF9pG01RbeCx6DaZADNwNro2NKq4I";
-
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 const commandRef = ref(db, "command");
@@ -80,6 +85,7 @@ const connectionRef = ref(db, "connectionStatus");
 // DOM
 const qInput=document.getElementById("q");
 const searchBtn=document.getElementById("searchBtn");
+const playBtn=document.getElementById("playBtn");
 const stopBtn=document.getElementById("stopBtn");
 const listEl=document.getElementById("list");
 const statusEl=document.getElementById("status");
@@ -87,7 +93,7 @@ const muteBtn=document.getElementById("muteBtn");
 const volumeSlider=document.getElementById("volumeSlider");
 const connectBtn=document.getElementById("connectBtn");
 const disconnectBtn=document.getElementById("disconnectBtn");
-let muteState=false;
+const resetBtn=document.getElementById("resetBtn");
 
 // Room
 let roomId = localStorage.getItem("roomId") || Math.floor(100000 + Math.random()*900000).toString();
@@ -116,19 +122,11 @@ async function search(){
       if(!v.id?.videoId) return;
       const el=document.createElement("div");
       el.className="item";
-      el.innerHTML=`<img src="${v.snippet.thumbnails.medium.url}"><div class="title">${v.snippet.title}</div>
-      <div>
-        <button class="playBtn">▶️ Phát</button>
-      </div>`;
-      el.querySelector(".playBtn").onclick=()=> { 
-        set(commandRef,{
-          id: v.id.videoId,
-          title: v.snippet.title,
-          play:true,
-          mute:muteState,
-          roomId
-        });
-        statusEl.textContent=`▶️ Đang phát: ${v.snippet.title}`;
+      el.innerHTML=`<img src="${v.snippet.thumbnails.medium.url}"><div class="title">${v.snippet.title}</div>`;
+      el.onclick=()=>{ 
+        qInput.dataset.selectedId = v.id.videoId;
+        qInput.dataset.selectedTitle = v.snippet.title;
+        statusEl.textContent=`✅ Chọn bài: ${v.snippet.title}`;
       };
       listEl.appendChild(el);
     });
@@ -137,21 +135,41 @@ async function search(){
 searchBtn.onclick=search;
 qInput.addEventListener("keypress",e=>{if(e.key==="Enter") search();});
 
-// Controls
-stopBtn.onclick=()=>{ 
-  set(commandRef,{id:"",title:"Intro / Slide",play:false,mute:muteState,roomId}); 
-  statusEl.textContent="⏹️ Đã dừng phát"; 
-};
+// Play & Add
+playBtn.onclick=()=>{
+  const id = qInput.dataset.selectedId;
+  const title = qInput.dataset.selectedTitle;
+  if(!id) return alert("Chọn bài trước khi phát!");
+  set(commandRef,{id,title,play:true,roomId});
+  statusEl.textContent=`▶️ Phát bài: ${title}`;
+}
+
+// Stop
+stopBtn.onclick=()=>{ set(commandRef,{id:"",title:"Intro/Slide",play:false,roomId}); statusEl.textContent="⏹️ Đã dừng phát"; };
+
+// Mute/Volume
+let muteState=false;
 muteBtn.onclick=()=>{ muteState=!muteState; set(commandRef,{mute:muteState,roomId}); muteBtn.textContent=muteState?"🔊 Bật âm thanh":"🔇 Tắt âm thanh"; };
 volumeSlider.oninput=()=>{ set(commandRef,{volume:Number(volumeSlider.value),roomId}); };
 
-// Connect / Disconnect
+// Connect/Disconnect
 connectBtn.onclick=()=>{ let room=prompt("Nhập Room ID (6 số) để kết nối:"); if(!room||!/^\d{6}$/.test(room)){alert("Phải nhập đúng Room ID 6 số!"); return;} localStorage.setItem("roomId",room); roomId=room; set(connectionRef,{connected:true,roomId}).then(()=>alert("✅ Đã kết nối Room: "+room)); };
 disconnectBtn.onclick=()=>{ let room=localStorage.getItem("roomId"); if(!room){alert("Chưa có Room nào kết nối!"); return;} set(connectionRef,{connected:false,roomId:""}).then(()=>{localStorage.removeItem("roomId"); alert("❌ Đã ngắt kết nối Room: "+room);}); };
 
-// Update command from Screen
-onValue(commandRef,snapshot=>{ const cmd=snapshot.val(); if(!cmd) return; muteBtn.textContent=cmd.mute?"🔊 Bật âm thanh":"🔇 Tắt âm thanh"; volumeSlider.value=cmd.volume??100; });
+// Reset số bài đã phát
+resetBtn.onclick=()=> {
+  if(confirm("Bạn có muốn reset số bài đã phát về 0 không?")){
+    set(commandRef,{resetTotal:true,roomId});
+  }
+}
 
+// Listen command changes
+onValue(commandRef,snapshot=>{
+  const cmd = snapshot.val();
+  if(!cmd) return;
+  muteBtn.textContent=cmd.mute?"🔊 Bật âm thanh":"🔇 Tắt âm thanh";
+  volumeSlider.value=cmd.volume??100;
+});
 </script>
 </body>
 </html>
