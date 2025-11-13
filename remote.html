@@ -20,13 +20,16 @@ button.searchBtn:hover{ background:#e52a2f; }
 .item img{ width:80px; height:60px; object-fit:cover; margin-right:12px; border-radius:6px; }
 .title{ font-size:0.95em; line-height:1.2em; flex:1; color:#ff3b3f; }
 #status{ margin-top:10px; font-size:0.9em; }
-#playlist{ margin-top:10px; display:flex; flex-wrap:wrap; gap:5px; }
-.playlist-item{ background:#ffecec; padding:4px 6px; border-radius:4px; display:flex; align-items:center; gap:5px; font-size:0.85em; }
-.playlist-item button{ background:#ff3b3f; border:none; color:#fff; cursor:pointer; border-radius:3px; padding:0 4px; font-size:0.75em; }
 .controls{ display:flex; gap:10px; margin-top:15px; flex-wrap:wrap; }
 .controls button{ flex:1; border-radius:6px; font-size:15px; border:none; background:#ff3b3f; color:#fff; cursor:pointer; }
 .controls button:hover{ background:#e52a2f; }
 #volumeSlider{ flex:2; margin-top:10px; }
+
+/* Playlist */
+#playlistContainer { margin-top:20px; }
+#playlist .item { justify-content: space-between; }
+#playlist button { margin-left:5px; background:#ff3b3f; border:none; padding:4px 6px; color:#fff; border-radius:4px; cursor:pointer; }
+#playlist button:hover { background:#e52a2f; }
 </style>
 </head>
 <body>
@@ -49,8 +52,13 @@ button.searchBtn:hover{ background:#e52a2f; }
     <label for="karaokeOnly">Chỉ Karaoke</label>
   </div>
   <div id="status"></div>
-  <div id="playlist"></div>
   <div id="list"></div>
+
+  <div id="playlistContainer">
+    <h2>📋 Playlist</h2>
+    <div id="playlist"></div>
+  </div>
+
   <div class="controls">
     <button id="muteBtn">🔇 Tắt/Bật âm thanh</button>
     <input type="range" min="0" max="100" value="100" id="volumeSlider">
@@ -61,7 +69,7 @@ button.searchBtn:hover{ background:#e52a2f; }
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
-import { getDatabase, ref, set, onValue, push, remove } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-database.js";
+import { getDatabase, ref, set, onValue, push, remove, get } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-database.js";
 
 const firebaseConfig = { 
   apiKey: "AIzaSyC1JW_dg-YChaizarbS-7UUN3njFomMPvI",
@@ -73,13 +81,12 @@ const firebaseConfig = {
   appId: "1:183555717781:web:d3920b342c5d27e107f99c",
   measurementId: "G-VZ228HB7GF"
 };
-const API_KEY = "AIzaSyALYcXF9pG01RbeCx6DaZADNwNro2NKq4I";
 
+const API_KEY = "AIzaSyALYcXF9pG01RbeCx6DaZADNwNro2NKq4I";
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 const commandRef = ref(db, "command");
 const connectionRef = ref(db, "connectionStatus");
-const playlistRef = ref(db, "playlist");
 
 // DOM
 const qInput=document.getElementById("q");
@@ -87,12 +94,17 @@ const searchBtn=document.getElementById("searchBtn");
 const stopBtn=document.getElementById("stopBtn");
 const listEl=document.getElementById("list");
 const statusEl=document.getElementById("status");
-const playlistEl=document.getElementById("playlist");
 const muteBtn=document.getElementById("muteBtn");
 const volumeSlider=document.getElementById("volumeSlider");
 const connectBtn=document.getElementById("connectBtn");
 const disconnectBtn=document.getElementById("disconnectBtn");
+const playlistEl = document.getElementById("playlist");
 let muteState=false;
+
+// Room
+let roomId = localStorage.getItem("roomId") || Math.floor(100000 + Math.random()*900000).toString();
+localStorage.setItem("roomId", roomId);
+const playlistRef = ref(db,"playlist/"+roomId);
 
 // Ngày giờ & Refresh
 const dateTimeEl=document.getElementById("dateTime");
@@ -100,56 +112,59 @@ const refreshBtn=document.getElementById("refreshBtn");
 function updateDateTime(){ const now=new Date(); dateTimeEl.textContent=now.toLocaleString(); }
 setInterval(updateDateTime,1000);
 updateDateTime();
-refreshBtn.addEventListener("click",()=>location.reload());
+refreshBtn.onclick=()=>location.reload();
 
-// Playlist
+// Playlist Functions
 function renderPlaylist(list){
   playlistEl.innerHTML="";
   list.forEach((item,index)=>{
-    const div=document.createElement("div");
-    div.className="playlist-item";
-    div.innerHTML=`${item.title} 
-      <button data-index="${index}" class="priorityBtn">⬆️</button>
-      <button data-index="${index}" class="deleteBtn">❌</button>`;
-    playlistEl.appendChild(div);
-  });
-
-  // Nút ưu tiên
-  playlistEl.querySelectorAll(".priorityBtn").forEach(btn=>{
-    btn.addEventListener("click",()=>{
-      const idx=Number(btn.dataset.index);
-      const newList=[list[idx], ...list.filter((_,i)=>i!==idx)];
-      set(playlistRef, newList);
-    });
-  });
-
-  // Nút xóa
-  playlistEl.querySelectorAll(".deleteBtn").forEach(btn=>{
-    btn.addEventListener("click",()=>{
-      const idx=Number(btn.dataset.index);
-      const newList=list.filter((_,i)=>i!==idx);
-      set(playlistRef,newList);
-    });
+    const el = document.createElement("div");
+    el.className = "item";
+    el.innerHTML = `
+      <div class="title">${item.title}</div>
+      <div>
+        <button onclick="prioritize(${index})">⬆️ Ưu tiên</button>
+        <button onclick="removeFromPlaylist(${index})">❌ Xóa</button>
+      </div>
+    `;
+    playlistEl.appendChild(el);
   });
 }
 
-// Listen playlist
-onValue(playlistRef,snapshot=>{
-  const list=snapshot.val() || [];
-  renderPlaylist(list);
-  if(list.length>0){
-    const next= list[0];
-    set(commandRef,{id:next.id,title:next.title,play:true,mute:muteState,roomId:localStorage.getItem("roomId")});
-  }
-});
+async function addToPlaylist(video){
+  const newRef = push(playlistRef);
+  await set(newRef, {id: video.id, title: video.title});
+  statusEl.textContent=`✅ Thêm vào Playlist: ${video.title}`;
+}
 
-// Update playlist status 1 phút 1 lần
-setInterval(()=>{
-  onValue(playlistRef,snapshot=>{
-    const list=snapshot.val() || [];
-    statusEl.textContent=`📃 Số bài còn lại: ${list.length} | Bài tiếp theo: ${list[0]?.title||"Không có"}`;
-  });
-},60000);
+window.removeFromPlaylist = async function(index){
+  const snapshot = await get(playlistRef);
+  const list = snapshot.val() || [];
+  const key = Object.keys(list)[index];
+  if(key) remove(ref(db,"playlist/"+roomId+"/"+key));
+}
+
+window.prioritize = async function(index){
+  const snapshot = await get(playlistRef);
+  const list = snapshot.val() || [];
+  const keys = Object.keys(list);
+  if(index>0){
+    const key1 = keys[index];
+    const key0 = keys[index-1];
+    const temp = list[key1];
+    list[key1] = list[key0];
+    list[key0] = temp;
+    // overwrite
+    keys.forEach(k=> set(ref(db,"playlist/"+roomId+"/"+k), list[k]));
+  }
+}
+
+// Lắng nghe playlist từ Firebase
+onValue(playlistRef,snapshot=>{
+  const data = snapshot.val();
+  const list = data ? Object.values(data) : [];
+  renderPlaylist(list);
+});
 
 // Search YouTube
 async function search(){
@@ -167,46 +182,29 @@ async function search(){
       const el=document.createElement("div");
       el.className="item";
       el.innerHTML=`<img src="${v.snippet.thumbnails.medium.url}"><div class="title">${v.snippet.title}</div>`;
-      el.addEventListener("click",()=>{
-        playlistRef.get().then(snapshot=>{
-          const list=snapshot.val()||[];
-          const exists=list.some(i=>i.id===v.id.videoId);
-          const newList=[...list,{id:v.id.videoId,title:v.snippet.title}];
-          set(playlistRef,newList);
-          statusEl.textContent=`✅ Đã thêm: ${v.snippet.title}`;
-        });
-      });
+      el.onclick=()=>{ 
+        set(commandRef,{id:v.id.videoId,title:v.snippet.title,play:true,mute:muteState,roomId}); 
+        addToPlaylist({id:v.id.videoId,title:v.snippet.title});
+        statusEl.textContent="▶️ Đang phát: "+v.snippet.title; 
+      };
       listEl.appendChild(el);
     });
   }catch(err){ console.error(err); statusEl.textContent="⚠️ Lỗi khi tìm kiếm!"; }
 }
-searchBtn.addEventListener("click", search);
+searchBtn.onclick=search;
 qInput.addEventListener("keypress",e=>{if(e.key==="Enter") search();});
 
 // Controls
-stopBtn.addEventListener("click",()=>{ set(commandRef,{id:"",title:"Intro / Slide",play:false,mute:muteState,roomId:localStorage.getItem("roomId")}); statusEl.textContent="⏹️ Đã dừng phát"; });
-muteBtn.addEventListener("click",()=>{ muteState=!muteState; set(commandRef,{mute:muteState,roomId:localStorage.getItem("roomId")}); muteBtn.textContent=muteState?"🔊 Bật âm thanh":"🔇 Tắt âm thanh"; });
-volumeSlider.addEventListener("input",()=>{ set(commandRef,{volume:Number(volumeSlider.value),roomId:localStorage.getItem("roomId")}); });
+stopBtn.onclick=()=>{ set(commandRef,{id:"",title:"Intro / Slide",play:false,mute:muteState,roomId}); statusEl.textContent="⏹️ Đã dừng phát"; };
+muteBtn.onclick=()=>{ muteState=!muteState; set(commandRef,{mute:muteState,roomId}); muteBtn.textContent=muteState?"🔊 Bật âm thanh":"🔇 Tắt âm thanh"; };
+volumeSlider.oninput=()=>{ set(commandRef,{volume:Number(volumeSlider.value),roomId}); };
 
 // Connect / Disconnect
-connectBtn.addEventListener("click",()=>{
-  let room=prompt("Nhập Room ID (6 số) để kết nối:");
-  if(!room||!/^\d{6}$/.test(room)){alert("Phải nhập đúng Room ID 6 số!"); return;}
-  localStorage.setItem("roomId",room); set(connectionRef,{connected:true,roomId:room}).then(()=>alert("✅ Đã kết nối Room: "+room));
-});
-disconnectBtn.addEventListener("click",()=>{
-  let room=localStorage.getItem("roomId");
-  if(!room){alert("Chưa có Room nào kết nối!"); return;}
-  set(connectionRef,{connected:false,roomId:""}).then(()=>{localStorage.removeItem("roomId"); alert("❌ Đã ngắt kết nối Room: "+room);});
-});
+connectBtn.onclick=()=>{ let room=prompt("Nhập Room ID (6 số) để kết nối:"); if(!room||!/^\d{6}$/.test(room)){alert("Phải nhập đúng Room ID 6 số!"); return;} localStorage.setItem("roomId",room); roomId=room; set(connectionRef,{connected:true,roomId}).then(()=>alert("✅ Đã kết nối Room: "+room)); };
+disconnectBtn.onclick=()=>{ let room=localStorage.getItem("roomId"); if(!room){alert("Chưa có Room nào kết nối!"); return;} set(connectionRef,{connected:false,roomId:""}).then(()=>{localStorage.removeItem("roomId"); alert("❌ Đã ngắt kết nối Room: "+room);}); };
 
 // Update command from Screen
-onValue(commandRef,snapshot=>{
-  const cmd=snapshot.val();
-  if(!cmd) return;
-  muteBtn.textContent=cmd.mute?"🔊 Bật âm thanh":"🔇 Tắt âm thanh";
-  volumeSlider.value=cmd.volume??100;
-});
+onValue(commandRef,snapshot=>{ const cmd=snapshot.val(); if(!cmd) return; muteBtn.textContent=cmd.mute?"🔊 Bật âm thanh":"🔇 Tắt âm thanh"; volumeSlider.value=cmd.volume??100; });
 </script>
 </body>
 </html>
