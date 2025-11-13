@@ -14,7 +14,9 @@ html, body { margin:0; height:100%; background:#000; overflow:hidden; color:#fff
 .thumb { position:absolute; top:0; left:0; width:100%; height:100%; object-fit:cover; opacity:0; transition: opacity 1s ease; }
 
 #player { position:absolute;top:0;left:0;width:100%;height:100%; border:none; display:none; z-index:2; }
-#title { position:absolute; bottom:20px; left:0; right:0; text-align:center; font-size:28px; color:#fff; text-shadow:0 0 15px #000; font-weight:bold; z-index:3; }
+#title { position:absolute; bottom:20px; left:0; width:100%; color:#fff; text-shadow:0 0 15px #000; font-weight:bold; z-index:3; font-size:28px; white-space:nowrap; overflow:hidden; display:none; }
+#title span { display:inline-block; padding-left:100%; animation: scrollText 15s linear infinite; }
+@keyframes scrollText { 0% { transform: translateX(0%); } 100% { transform: translateX(-100%); } }
 </style>
 </head>
 <body>
@@ -25,11 +27,11 @@ html, body { margin:0; height:100%; background:#000; overflow:hidden; color:#fff
 
 <div id="thumbs"></div>
 <iframe id="player" allowfullscreen allow="autoplay"></iframe>
-<div id="title"></div>
+<div id="title"><span></span></div>
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
-import { getDatabase, ref, onValue, remove, query, orderByKey, limitToFirst } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-database.js";
+import { getDatabase, ref, onValue, remove, query, orderByKey, limitToFirst, set } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-database.js";
 
 // --- Firebase ---
 const firebaseConfig = {
@@ -51,6 +53,7 @@ const introText = document.getElementById("introText");
 const thumbsDiv = document.getElementById("thumbs");
 const playerIframe = document.getElementById("player");
 const titleEl = document.getElementById("title");
+const titleSpan = titleEl.querySelector("span");
 
 let thumbsArray = [];
 let currentThumb = 0;
@@ -62,11 +65,12 @@ function showIntroThenSlides() {
   intro.style.display='flex';
   thumbsDiv.style.display='none';
   playerIframe.style.display='none';
+  titleEl.style.display='none';
   introText.style.display='block';
   setTimeout(()=> {
     introText.style.display='none';
     startSlides();
-  },5000); // Hiển thị intro 5s
+  },5000);
 }
 
 // --- Slide thumbnail ---
@@ -82,10 +86,10 @@ function startSlides() {
     thumbs[currentThumb].style.opacity=0;
     currentThumb=(currentThumb+1)%thumbs.length;
     thumbs[currentThumb].style.opacity=1;
-  },5000); // Chuyển mỗi 5 giây
+  },5000);
 }
 
-// --- Lấy trending âm nhạc từ YouTube ---
+// --- Lấy trending âm nhạc ---
 async function fetchTrendingMusic() {
   const apiKey = "AIzaSyALYcXF9pG01RbeCx6DaZADNwNro2NKq4I";
   const url = `https://www.googleapis.com/youtube/v3/videos?part=snippet&chart=mostPopular&regionCode=VN&videoCategoryId=10&maxResults=5&key=${apiKey}`;
@@ -102,37 +106,23 @@ async function fetchTrendingMusic() {
   showIntroThenSlides();
 }
 
-// --- Phát video tiếp theo từ queue ---
-function playNextSong() {
-  const firstKeyQuery = query(ref(db, "queue"), orderByKey(), limitToFirst(1));
-  onValue(firstKeyQuery, snap=>{
-    const first = snap.val();
-    if(first){
-      const key = Object.keys(first)[0];
-      const val = first[key];
-      setCommand(val.id, val.title);
-      remove(ref(db,"queue/"+key));
-    } else {
-      setCommand("", "Intro / Slide");
-    }
-  }, {onlyOnce:true});
-}
-
 // --- Hiển thị bài hát ---
 function setCommand(id,title){
   currentVideoId=id;
-  titleEl.textContent=title || "Đang phát...";
-  if(!id){ // id rỗng => dừng video, hiện intro + slide
+  if(!id){ // id rỗng => dừng video, hiện intro + slide, ẩn title
     playerIframe.style.display='none';
+    titleEl.style.display='none';
     intro.style.display='flex';
     thumbsDiv.style.display='block';
     if(slideInterval) clearInterval(slideInterval);
     startSlides();
-  } else {
+  } else { // có nhạc => phát video + hiện title chạy
     playerIframe.src = `https://www.youtube.com/embed/${id}?autoplay=1&controls=0&modestbranding=1&rel=0&fs=0&enablejsapi=1`;
     intro.style.display='none';
     thumbsDiv.style.display='none';
     playerIframe.style.display='block';
+    titleEl.style.display='block';
+    titleSpan.textContent = title;
   }
 }
 
