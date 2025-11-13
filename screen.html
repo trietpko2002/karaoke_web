@@ -5,194 +5,92 @@
 <title>Karaoke Screen</title>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <style>
-html, body { margin:0; height:100%; overflow:hidden; font-family:sans-serif; background:#000; color:#fff; }
-#background { position:absolute; top:0; left:0; width:100%; height:100%; background:url('background.png') no-repeat center center; background-size:contain; z-index:0; opacity:1; transition:opacity 1s ease; }
-#player { position:absolute; top:0; left:0; width:100%; height:100%; border:none; display:none; z-index:1; opacity:0; transition:opacity 1s ease; }
-#title { position:absolute; bottom:20px; left:0; width:100%; font-weight:bold; font-size:28px; color:#fff; white-space:nowrap; overflow:hidden; text-shadow:0 0 15px #000; display:none; z-index:2; }
-#title span { display:inline-block; padding-left:100%; animation: scrollText 15s linear infinite; }
-@keyframes scrollText { 0%{transform:translateX(0%);} 100%{transform:translateX(-100%);} }
-
-#connectionStatus { position:absolute; top:10px; left:10px; font-size:26px; font-weight:bold; text-shadow:0 0 8px #000; z-index:3; }
-.connected { color:#0f0; }
-.disconnected { color:#ff3b3f; }
-
-#statusText {
-  position:absolute;
-  top:50%;
-  left:10px;
-  transform:translateY(-50%);
-  background:rgba(0,0,0,0.5);
-  color:#fff;
-  padding:10px 15px;
-  border-radius:8px;
-  font-size:24px;
-  font-weight:bold;
-  opacity:0;
-  transition:opacity 1s ease;
-  z-index:4;
-}
-
-#stats {
-  position:absolute;
-  top:10px;
-  right:10px;
-  background:rgba(0,0,0,0.5);
-  padding:10px 15px;
-  border-radius:8px;
-  font-size:22px;
-  z-index:5;
+html, body { margin:0; height:100%; background:#000; overflow:hidden; color:#fff; font-family:sans-serif; }
+#player, #bg { position:absolute; top:0; left:0; width:100%; height:100%; object-fit:cover; }
+#info { position:absolute; bottom:20px; left:20px; background:rgba(0,0,0,0.6); padding:10px 20px; border-radius:10px; font-size:20px; display:none; }
+#count { position:absolute; top:20px; right:20px; background:rgba(255,255,255,0.1); padding:10px 20px; border-radius:10px; font-size:18px; }
+.fade { animation: fadeInOut 1s ease; }
+@keyframes fadeInOut {
+  from { opacity:0; transform:translateY(20px); }
+  to { opacity:1; transform:translateY(0); }
 }
 </style>
 </head>
 <body>
-
-<div id="connectionStatus">Room ID: ——— (Chưa kết nối)</div>
-<div id="background"></div>
-<iframe id="player" allowfullscreen allow="autoplay"></iframe>
-<div id="title"><span></span></div>
-<div id="statusText"></div>
-<div id="stats">Đã hát: <span id="count">0</span> bài</div>
+<div id="bg"></div>
+<iframe id="player" allow="autoplay" frameborder="0"></iframe>
+<div id="info"></div>
+<div id="count">Đã hát: 0 bài</div>
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
-import { getDatabase, ref, onValue, set } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-database.js";
+import { getDatabase, ref, onValue, set, get } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-database.js";
 
-// Firebase Config
 const firebaseConfig = {
-  apiKey: "AIzaSyC1JW_dg-YChaizarbS-7UUN3njFomMPvI",
-  authDomain: "karaokeweb-d414b.firebaseapp.com",
-  databaseURL: "https://karaokeweb-d414b-default-rtdb.asia-southeast1.firebasedatabase.app",
-  projectId: "karaokeweb-d414b",
-  storageBucket: "karaokeweb-d414b.appspot.com",
-  messagingSenderId: "183555717781",
-  appId: "1:183555717781:web:d3920b342c5d27e107f99c",
-  measurementId: "G-VZ228HB7GF"
+  apiKey: "AIzaSyBFZ-3gJ9Gyj8lfmA1yN1l4H0x4P3hZhAE",
+  authDomain: "karaoke-remote.firebaseapp.com",
+  databaseURL: "https://karaoke-remote-default-rtdb.firebaseio.com",
+  projectId: "karaoke-remote",
+  storageBucket: "karaoke-remote.appspot.com",
+  messagingSenderId: "1044492205920",
+  appId: "1:1044492205920:web:karaokescreen"
 };
 
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
-const commandRef = ref(db,"command");
-const connectionRef = ref(db,"connectionStatus");
 
-// DOM
-const playerIframe = document.getElementById("player");
-const titleEl = document.getElementById("title");
-const titleSpan = titleEl.querySelector("span");
-const connectionStatusEl = document.getElementById("connectionStatus");
-const background = document.getElementById("background");
-const statusTextEl = document.getElementById("statusText");
+const player = document.getElementById("player");
+const info = document.getElementById("info");
 const countEl = document.getElementById("count");
-
 let count = 0;
-let currentVideoId = null;
-let player;
-let fadeTimeout = null;
 
-let roomId = localStorage.getItem("roomId") || Math.floor(100000 + Math.random()*900000).toString();
-localStorage.setItem("roomId", roomId);
-set(connectionRef,{connected:false, roomId});
+let roomId = prompt("Nhập Room ID:");
+if (!roomId) roomId = "default";
 
-// Fade function
-function fadeIn(el){ el.style.opacity=1; }
-function fadeOut(el){ el.style.opacity=0; }
+const songRef = ref(db, "rooms/"+roomId+"/song");
+const resetRef = ref(db, "rooms/"+roomId+"/reset");
+const resetScreenRef = ref(db, "rooms/"+roomId+"/resetScreen");
 
-// Status text popup
-function showStatusText(msg){
-  if(fadeTimeout) clearTimeout(fadeTimeout);
-  statusTextEl.textContent = msg;
-  statusTextEl.style.opacity = 1;
-  fadeTimeout = setTimeout(()=>{ statusTextEl.style.opacity = 0; },5000);
-}
-
-// Command handler
-function setCommand(id,title){
-  if(!id){
-    fadeOut(playerIframe);
-    fadeIn(background);
-    setTimeout(()=>{
-      playerIframe.style.display='none';
-      titleEl.style.display='none';
-    },1000);
-  } else {
-    background.style.display='block';
-    fadeOut(background);
-    playerIframe.style.display='block';
-    fadeIn(playerIframe);
-    titleEl.style.display='block';
-    titleSpan.textContent = title;
-    playerIframe.src = `https://www.youtube.com/embed/${id}?autoplay=1&controls=0&modestbranding=1&rel=0&fs=0&enablejsapi=1`;
-  }
-}
-
-// Listen to Remote
-onValue(commandRef,snapshot=>{
-  const cmd = snapshot.val();
-  if(!cmd) return;
-  if(cmd.roomId === roomId){
-    if(cmd.id && cmd.id !== currentVideoId){
-      currentVideoId = cmd.id;
-      setCommand(cmd.id,cmd.title);
-      count++;
-      countEl.innerText = count;
-    }
-
-    if(cmd.play!==undefined && player){
-      player[cmd.play?"playVideo":"pauseVideo"]();
-    }
-
-    if(cmd.mute!==undefined && player){
-      cmd.mute ? player.mute() : player.unMute();
-      showStatusText(cmd.mute ? "🔇 Tắt tiếng" : "🔊 Bật tiếng");
-    }
-
-    if(cmd.volume!==undefined && player){
-      player.setVolume(cmd.volume);
-      showStatusText(`🔊 Volume: ${cmd.volume}`);
-    }
-
-    if(cmd.reset){
-      count = 0;
-      countEl.innerText = 0;
-      showStatusText("🔄 Đã reset bộ đếm");
-    }
-
-    set(connectionRef,{connected:true, roomId});
+// Lắng nghe reset số bài
+onValue(resetRef, snap=>{
+  if (snap.val() === true){
+    count = 0;
+    countEl.textContent = "Đã hát: 0 bài";
+    set(resetRef, false);
   }
 });
 
-// Listen Room status
-onValue(connectionRef,snapshot=>{
-  const data = snapshot.val();
-  if(data?.connected){
-    connectionStatusEl.textContent = `✅ Room: ${data.roomId} (OK)`;
-    connectionStatusEl.classList.add("connected");
-    connectionStatusEl.classList.remove("disconnected");
-  } else {
-    connectionStatusEl.textContent = `Room ID: ${roomId} (Chưa kết nối)`;
-    connectionStatusEl.classList.add("disconnected");
-    connectionStatusEl.classList.remove("connected");
+// Lắng nghe reset screen
+onValue(resetScreenRef, snap=>{
+  if (snap.val() === true){
+    location.reload();
   }
 });
 
-// Load YouTube API
-let tag=document.createElement('script');
-tag.src="https://www.youtube.com/iframe_api";
-document.body.appendChild(tag);
+// Lắng nghe bài mới
+onValue(songRef, snap=>{
+  const song = snap.val();
+  if (!song) return;
 
-window.onYouTubeIframeAPIReady = function(){
-  player = new YT.Player('player',{
-    events:{
-      'onStateChange': e=>{
-        if(e.data === YT.PlayerState.ENDED){
-          fadeOut(playerIframe);
-          fadeIn(background);
-          titleEl.style.display='none';
-          playerIframe.src='';
-        }
-      }
-    }
-  });
-};
+  fadeVideo(song.url);
+  showInfo(song.title);
+  count++;
+  countEl.textContent = "Đã hát: " + count + " bài";
+});
+
+function fadeVideo(url){
+  player.classList.remove("fade");
+  void player.offsetWidth;
+  player.src = "https://www.youtube.com/embed/" + url + "?autoplay=1&controls=0";
+  player.classList.add("fade");
+}
+
+function showInfo(title){
+  info.textContent = "🎵 " + title;
+  info.style.display = "block";
+  info.classList.add("fade");
+  setTimeout(()=>{ info.style.display="none"; },5000);
+}
 </script>
 </body>
 </html>
