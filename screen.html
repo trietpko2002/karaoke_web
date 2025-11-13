@@ -7,35 +7,29 @@
 <style>
 html, body { margin:0; height:100%; overflow:hidden; font-family:sans-serif; background:#000; color:#fff; }
 #background { 
-  position:absolute; 
-  top:0; left:0; width:100%; height:100%; 
+  position:absolute; top:0; left:0; width:100%; height:100%; 
   background: url('background.png') no-repeat center center; 
-  background-size: contain; 
-  background-color:#000;
+  background-size:contain; 
   z-index:0; 
+  background-color:#000;
 }
 #player { 
   position:absolute; top:0; left:0; width:100%; height:100%; 
   border:none; display:none; z-index:1; 
 }
-#youtubeLogo {
-  position:absolute;
-  bottom:10px;
-  right:10px;
-  width:80px;
-  height:auto;
-  z-index:10;
-}
 #title { display:none; } /* Ẩn tên và kênh */
 #statusText { display:none; } /* Ẩn trạng thái */
 #songCount { display:none; } /* Ẩn số bài */
+#connectionStatus { position:absolute; top:10px; left:10px; font-size:28px; font-weight:bold; text-shadow:0 0 8px #000; z-index:3; }
+.connected { color:#0f0; }
+.disconnected { color:#ff3b3f; }
 </style>
 </head>
 <body>
 
+<div id="connectionStatus">Room ID: ——— (Chưa kết nối)</div>
 <div id="background"></div>
 <iframe id="player" allowfullscreen allow="autoplay" allow="autoplay; encrypted-media"></iframe>
-<img src="https://upload.wikimedia.org/wikipedia/commons/4/42/YouTube_icon_%282013-2017%29.png" id="youtubeLogo">
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
@@ -60,15 +54,15 @@ const resetRef = ref(db,"resetScreen");
 
 const playerIframe = document.getElementById("player");
 const background = document.getElementById("background");
+const connectionStatusEl = document.getElementById("connectionStatus");
 
 let currentVideoId = null;
-
 let roomId = localStorage.getItem("roomId") || Math.floor(100000 + Math.random()*900000).toString();
 localStorage.setItem("roomId", roomId);
+set(connectionRef,{connected:false, roomId});
 
+// Reset screen 1 lần
 let resetHandled=false;
-
-// Reset screen
 onValue(resetRef,snapshot=>{
   if(snapshot.val()===true && !resetHandled){
     resetHandled=true;
@@ -77,14 +71,14 @@ onValue(resetRef,snapshot=>{
   }
 });
 
-// Lắng nghe lệnh phát từ Remote
+// Lắng nghe lệnh từ Remote
 onValue(commandRef,snapshot=>{
   const cmd = snapshot.val();
   if(!cmd) return;
   if(cmd.roomId === roomId){
     if(cmd.id && cmd.id !== currentVideoId){
       currentVideoId = cmd.id;
-      // Phát video và tắt mọi controls/thumbnail gợi ý
+      // Phát video, tắt controls, loại bỏ màn hình kết thúc
       playerIframe.src = `https://www.youtube.com/embed/${cmd.id}?autoplay=1&controls=0&rel=0&modestbranding=1&fs=0&disablekb=1&iv_load_policy=3`;
       playerIframe.style.display='block';
       background.style.display='none';
@@ -93,7 +87,21 @@ onValue(commandRef,snapshot=>{
   }
 });
 
-// YouTube IFrame API (ẩn màn hình kết thúc)
+// Connection status
+onValue(connectionRef,snapshot=>{
+  const data = snapshot.val();
+  if(data?.connected){
+    connectionStatusEl.textContent = `✅ Room: ${data.roomId} (OK)`;
+    connectionStatusEl.classList.add("connected");
+    connectionStatusEl.classList.remove("disconnected");
+  } else {
+    connectionStatusEl.textContent = `Room ID: ${roomId} (Chưa kết nối)`;
+    connectionStatusEl.classList.add("disconnected");
+    connectionStatusEl.classList.remove("connected");
+  }
+});
+
+// YouTube IFrame API
 let tag=document.createElement('script');
 tag.src="https://www.youtube.com/iframe_api";
 document.body.appendChild(tag);
@@ -104,7 +112,7 @@ function onYouTubeIframeAPIReady(){
       'onReady':()=>{},
       'onStateChange': e=>{
         if(e.data===YT.PlayerState.ENDED){
-          // Khi kết thúc video → hiển thị background
+          // Khi kết thúc video → hiện background, không hiện màn hình kết thúc
           playerIframe.style.display='none';
           background.style.display='block';
         }
