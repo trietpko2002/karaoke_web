@@ -11,9 +11,9 @@ body { margin:0; font-family:sans-serif; background:#fff; color:#ff3b3f; display
 #topBar button:hover{ background:#e52a2f; }
 #left{ flex:1; padding:20px; overflow-y:auto; }
 h2{ margin-bottom:15px; color:#ff3b3f; border-bottom:2px solid #ff3b3f; padding-bottom:5px; }
-.search-bar{ display:flex; margin-bottom:10px; }
-input{ flex:1; padding:10px; border:2px solid #ff3b3f; border-radius:5px 0 0 5px; font-size:16px; outline:none; }
-button.searchBtn{ padding:10px 14px; border:none; background:#ff3b3f; color:white; border-radius:0 5px 5px 0; cursor:pointer; font-weight:bold; }
+.search-bar{ display:flex; margin-bottom:10px; flex-wrap:wrap; gap:5px; }
+input{ flex:1; padding:10px; border:2px solid #ff3b3f; border-radius:5px; font-size:16px; outline:none; }
+button.searchBtn, .search-bar button{ padding:10px 14px; border:none; background:#ff3b3f; color:white; border-radius:5px; cursor:pointer; font-weight:bold; }
 button.searchBtn:hover{ background:#e52a2f; }
 #status{ margin-top:10px; font-size:0.9em; }
 .controls{ display:flex; gap:10px; margin-top:15px; flex-wrap:wrap; }
@@ -30,7 +30,7 @@ button.searchBtn:hover{ background:#e52a2f; }
 
 <div id="topBar">
   <div id="dateTime"></div>
-  <div>Ver Web: 2.1</div>
+  <div>Ver Web: 2.2</div>
   <button id="refreshBtn">🔄 Refresh</button>
 </div>
 
@@ -77,6 +77,7 @@ const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 const commandRef = ref(db, "command");
 const connectionRef = ref(db, "connectionStatus");
+const resetRef = ref(db, "resetScreen");
 
 // DOM
 const qInput=document.getElementById("q");
@@ -143,8 +144,9 @@ playBtn.onclick=()=>{
 // 🔄 Reset Screen
 resetScreenBtn.onclick=()=>{
   if(confirm("Bạn có chắc muốn reload lại màn hình Screen không?")){
-    set(commandRef,{resetScreen:true,roomId});
+    set(resetRef,true);
     statusEl.textContent="🔄 Đã gửi lệnh reset screen!";
+    setTimeout(()=>set(resetRef,false),3000);
   }
 };
 
