@@ -31,6 +31,18 @@ html, body { margin:0; height:100%; overflow:hidden; font-family:sans-serif; bac
   transition:opacity 1s ease;
   z-index:4;
 }
+
+/* Playlist count */
+#playlistCount {
+  position:absolute;
+  top:60px;
+  right:20px;
+  font-size:24px;
+  background:rgba(0,0,0,0.5);
+  padding:8px 12px;
+  border-radius:8px;
+  z-index:4;
+}
 </style>
 </head>
 <body>
@@ -40,6 +52,7 @@ html, body { margin:0; height:100%; overflow:hidden; font-family:sans-serif; bac
 <iframe id="player" allowfullscreen allow="autoplay"></iframe>
 <div id="title"><span></span></div>
 <div id="statusText"></div>
+<div id="playlistCount">🎵 0 bài</div>
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
@@ -61,6 +74,10 @@ const db = getDatabase(app);
 const commandRef = ref(db,"command");
 const connectionRef = ref(db,"connectionStatus");
 
+let roomId = localStorage.getItem("roomId") || Math.floor(100000 + Math.random()*900000).toString();
+localStorage.setItem("roomId", roomId);
+set(connectionRef,{connected:false, roomId});
+
 // DOM
 const playerIframe = document.getElementById("player");
 const titleEl = document.getElementById("title");
@@ -68,13 +85,11 @@ const titleSpan = titleEl.querySelector("span");
 const connectionStatusEl = document.getElementById("connectionStatus");
 const background = document.getElementById("background");
 const statusTextEl = document.getElementById("statusText");
+const playlistCountEl = document.getElementById("playlistCount");
 
 let currentVideoId = null;
-let roomId = localStorage.getItem("roomId") || Math.floor(100000 + Math.random()*900000).toString();
-localStorage.setItem("roomId", roomId);
-set(connectionRef,{connected:false, roomId});
-
 let fadeTimeout = null;
+
 function showStatusText(msg){
   if(fadeTimeout) clearTimeout(fadeTimeout);
   statusTextEl.textContent = msg;
@@ -82,7 +97,6 @@ function showStatusText(msg){
   fadeTimeout = setTimeout(()=>{ statusTextEl.style.opacity = 0; },5000);
 }
 
-// Set command: play/pause video
 function setCommand(id,title){
   currentVideoId=id;
   if(!id){
@@ -98,7 +112,7 @@ function setCommand(id,title){
   }
 }
 
-// Listen Remote
+// Listen Remote commands
 onValue(commandRef,snapshot=>{
   const cmd = snapshot.val();
   if(!cmd) return;
@@ -110,7 +124,7 @@ onValue(commandRef,snapshot=>{
     }
 
     if(cmd.mute!==undefined){
-      playerIframe.contentWindow.postMessage(`{"event":"command","func":"${cmd.mute? "mute":"unMute"}","args":""}`,'*');
+      playerIframe.contentWindow.postMessage(`{"event":"command","func":"${cmd.mute? "mute":"unMute"},"args":""}`,'*');
       showStatusText(cmd.mute ? "🔇 Tắt tiếng" : "🔊 Bật tiếng");
     }
 
@@ -134,6 +148,19 @@ onValue(connectionRef,snapshot=>{
     connectionStatusEl.textContent = `Room ID: ${roomId} (Chưa kết nối)`;
     connectionStatusEl.classList.add("disconnected");
     connectionStatusEl.classList.remove("connected");
+  }
+});
+
+// Listen playlist updates
+const playlistRef = ref(db,"playlist/"+roomId);
+onValue(playlistRef, snapshot=>{
+  const data = snapshot.val();
+  const count = data ? Object.keys(data).length : 0;
+  playlistCountEl.textContent = `🎵 ${count} bài`;
+  if(count>0){
+    // Lấy bài mới nhất
+    const latest = Object.values(data)[Object.keys(data).length-1];
+    showStatusText(`✅ Thêm bài: ${latest.title}`);
   }
 });
 
