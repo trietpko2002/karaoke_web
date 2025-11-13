@@ -24,12 +24,6 @@ button.searchBtn:hover{ background:#e52a2f; }
 .controls button{ flex:1; border-radius:6px; font-size:15px; border:none; background:#ff3b3f; color:#fff; cursor:pointer; }
 .controls button:hover{ background:#e52a2f; }
 #volumeSlider{ flex:2; margin-top:10px; }
-
-/* Playlist */
-#playlistContainer { margin-top:20px; }
-#playlist .item { justify-content: space-between; }
-#playlist button { margin-left:5px; background:#ff3b3f; border:none; padding:4px 6px; color:#fff; border-radius:4px; cursor:pointer; }
-#playlist button:hover { background:#e52a2f; }
 </style>
 </head>
 <body>
@@ -54,12 +48,6 @@ button.searchBtn:hover{ background:#e52a2f; }
   <div id="status"></div>
   <div id="list"></div>
 
-  <div id="playlistContainer">
-    <h2>📋 Playlist</h2>
-    <div id="playlist"></div>
-    <button id="playNextBtn" style="margin-top:10px; background:#ff3b3f; color:#fff; padding:6px 12px; border:none; border-radius:4px; cursor:pointer;">▶️ Phát tiếp theo</button>
-  </div>
-
   <div class="controls">
     <button id="muteBtn">🔇 Tắt/Bật âm thanh</button>
     <input type="range" min="0" max="100" value="100" id="volumeSlider">
@@ -70,7 +58,7 @@ button.searchBtn:hover{ background:#e52a2f; }
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
-import { getDatabase, ref, set, onValue, push, remove, get, update } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-database.js";
+import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-database.js";
 
 const firebaseConfig = { 
   apiKey: "AIzaSyC1JW_dg-YChaizarbS-7UUN3njFomMPvI",
@@ -82,8 +70,8 @@ const firebaseConfig = {
   appId: "1:183555717781:web:d3920b342c5d27e107f99c",
   measurementId: "G-VZ228HB7GF"
 };
-
 const API_KEY = "AIzaSyALYcXF9pG01RbeCx6DaZADNwNro2NKq4I";
+
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 const commandRef = ref(db, "command");
@@ -99,14 +87,11 @@ const muteBtn=document.getElementById("muteBtn");
 const volumeSlider=document.getElementById("volumeSlider");
 const connectBtn=document.getElementById("connectBtn");
 const disconnectBtn=document.getElementById("disconnectBtn");
-const playlistEl = document.getElementById("playlist");
-const playNextBtn = document.getElementById("playNextBtn");
 let muteState=false;
 
 // Room
 let roomId = localStorage.getItem("roomId") || Math.floor(100000 + Math.random()*900000).toString();
 localStorage.setItem("roomId", roomId);
-const playlistRef = ref(db,"playlist/"+roomId);
 
 // Ngày giờ & Refresh
 const dateTimeEl=document.getElementById("dateTime");
@@ -115,83 +100,6 @@ function updateDateTime(){ const now=new Date(); dateTimeEl.textContent=now.toLo
 setInterval(updateDateTime,1000);
 updateDateTime();
 refreshBtn.onclick=()=>location.reload();
-
-// Playlist Functions
-async function getPlaylist(){ 
-  const snapshot = await get(playlistRef);
-  const list = snapshot.val() ? Object.entries(snapshot.val()) : [];
-  return list; // [ [key, {id,title}], ...]
-}
-
-function renderPlaylist(list){
-  playlistEl.innerHTML="";
-  list.forEach(([key,item],index)=>{
-    const el = document.createElement("div");
-    el.className = "item";
-    el.innerHTML = `
-      <div class="title">${item.title}</div>
-      <div>
-        <button onclick="playNow('${key}')">▶️ Phát</button>
-        <button onclick="prioritize('${key}')">⬆️ Ưu tiên</button>
-        <button onclick="removeFromPlaylist('${key}')">❌ Xóa</button>
-      </div>
-    `;
-    playlistEl.appendChild(el);
-  });
-}
-
-async function addToPlaylist(video){
-  const newRef = push(playlistRef);
-  await set(newRef, {id: video.id, title: video.title});
-  statusEl.textContent=`✅ Đã thêm vào Playlist: ${video.title}`;
-}
-
-async function playVideo(video){
-  // Gửi lệnh phát
-  set(commandRef,{
-    id: video.id,
-    title: video.title,
-    play:true,
-    mute:muteState,
-    roomId
-  });
-  statusEl.textContent=`▶️ Đang phát: ${video.title}`;
-}
-
-// Các hàm window để truy cập từ HTML
-window.removeFromPlaylist = async function(key){
-  if(!key) return;
-  await remove(ref(db,"playlist/"+roomId+"/"+key));
-}
-
-window.prioritize = async function(key){
-  if(!key) return;
-  const snapshot = await get(playlistRef);
-  const list = snapshot.val() ? Object.entries(snapshot.val()) : [];
-  const index = list.findIndex(([k])=>k===key);
-  if(index>0){
-    const [[k,item]] = list.splice(index,1); // remove
-    list.unshift([k,item]); // thêm lên đầu
-    // update lại thứ tự
-    for(let [i,[k2,item2]] of list.entries()){
-      await set(ref(db,"playlist/"+roomId+"/"+k2), item2);
-    }
-  }
-}
-
-window.playNow = async function(key){
-  if(!key) return;
-  const snapshot = await get(ref(db,"playlist/"+roomId+"/"+key));
-  if(snapshot.exists()){
-    playVideo(snapshot.val());
-  }
-}
-
-// Lắng nghe playlist từ Firebase
-onValue(playlistRef,snapshot=>{
-  const data = snapshot.val() ? Object.entries(snapshot.val()) : [];
-  renderPlaylist(data);
-});
 
 // Search YouTube
 async function search(){
@@ -211,10 +119,17 @@ async function search(){
       el.innerHTML=`<img src="${v.snippet.thumbnails.medium.url}"><div class="title">${v.snippet.title}</div>
       <div>
         <button class="playBtn">▶️ Phát</button>
-        <button class="addBtn">➕ Thêm</button>
       </div>`;
-      el.querySelector(".addBtn").onclick=()=> addToPlaylist({id:v.id.videoId,title:v.snippet.title});
-      el.querySelector(".playBtn").onclick=()=> { addToPlaylist({id:v.id.videoId,title:v.snippet.title}); playVideo({id:v.id.videoId,title:v.snippet.title}); };
+      el.querySelector(".playBtn").onclick=()=> { 
+        set(commandRef,{
+          id: v.id.videoId,
+          title: v.snippet.title,
+          play:true,
+          mute:muteState,
+          roomId
+        });
+        statusEl.textContent=`▶️ Đang phát: ${v.snippet.title}`;
+      };
       listEl.appendChild(el);
     });
   }catch(err){ console.error(err); statusEl.textContent="⚠️ Lỗi khi tìm kiếm!"; }
@@ -224,26 +139,11 @@ qInput.addEventListener("keypress",e=>{if(e.key==="Enter") search();});
 
 // Controls
 stopBtn.onclick=()=>{ 
-  set(commandRef,{
-    id:"",          
-    title:"Intro / Slide",
-    play:false,
-    mute:muteState,
-    roomId
-  }); 
+  set(commandRef,{id:"",title:"Intro / Slide",play:false,mute:muteState,roomId}); 
   statusEl.textContent="⏹️ Đã dừng phát"; 
 };
 muteBtn.onclick=()=>{ muteState=!muteState; set(commandRef,{mute:muteState,roomId}); muteBtn.textContent=muteState?"🔊 Bật âm thanh":"🔇 Tắt âm thanh"; };
 volumeSlider.oninput=()=>{ set(commandRef,{volume:Number(volumeSlider.value),roomId}); };
-
-// Play next
-playNextBtn.onclick = async function(){
-  const list = await getPlaylist();
-  if(list.length>0){
-    const [key,item] = list[0];
-    playVideo(item);
-  }
-}
 
 // Connect / Disconnect
 connectBtn.onclick=()=>{ let room=prompt("Nhập Room ID (6 số) để kết nối:"); if(!room||!/^\d{6}$/.test(room)){alert("Phải nhập đúng Room ID 6 số!"); return;} localStorage.setItem("roomId",room); roomId=room; set(connectionRef,{connected:true,roomId}).then(()=>alert("✅ Đã kết nối Room: "+room)); };
@@ -251,6 +151,7 @@ disconnectBtn.onclick=()=>{ let room=localStorage.getItem("roomId"); if(!room){a
 
 // Update command from Screen
 onValue(commandRef,snapshot=>{ const cmd=snapshot.val(); if(!cmd) return; muteBtn.textContent=cmd.mute?"🔊 Bật âm thanh":"🔇 Tắt âm thanh"; volumeSlider.value=cmd.volume??100; });
+
 </script>
 </body>
 </html>
