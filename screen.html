@@ -5,41 +5,33 @@
 <title>Karaoke Screen</title>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <style>
-html, body { margin:0; height:100%; overflow:hidden; font-family:sans-serif; background:#000; color:#fff; }
+html, body { 
+  margin:0; height:100%; overflow:hidden; 
+  font-family:sans-serif; background:#000; color:#fff;
+}
 #background { 
   position:absolute; top:0; left:0; width:100%; height:100%; 
   background: url('background.png') no-repeat center center; 
   background-size:contain; 
-  z-index:0; 
   background-color:#000;
+  z-index:0;
 }
 #player { 
   position:absolute; top:0; left:0; width:100%; height:100%; 
-  border:none; display:none; z-index:1; 
+  border:none; display:none; z-index:1;
 }
 #title { 
-  position:absolute; bottom:20px; left:0; width:100%; font-weight:bold; font-size:28px; color:#fff; white-space:nowrap; overflow:hidden; text-shadow:0 0 15px #000; display:none; z-index:2;
+  position:absolute; bottom:20px; left:0; width:100%; font-weight:bold; font-size:28px;
+  color:#fff; white-space:nowrap; overflow:hidden; text-shadow:0 0 15px #000; 
+  display:none; z-index:2;
 }
 #title span { display:inline-block; padding-left:100%; animation: scrollText 15s linear infinite; }
 @keyframes scrollText { 0%{transform:translateX(0%);} 100%{transform:translateX(-100%);} }
 
-#statusText {  
-  position:absolute;
-  top:50%;
-  left:10px;
-  transform:translateY(-50%);
-  background:rgba(0,0,0,0.5);
-  color:#fff;
-  padding:10px 15px;
-  border-radius:8px;
-  font-size:24px;
-  font-weight:bold;
-  opacity:0;
-  transition:opacity 1s ease;
-  z-index:4;
+#connectionStatus { 
+  position:absolute; top:10px; left:10px; font-size:24px; font-weight:bold;
+  text-shadow:0 0 8px #000; z-index:3;
 }
-
-#connectionStatus { position:absolute; top:10px; left:10px; font-size:28px; font-weight:bold; text-shadow:0 0 8px #000; z-index:3; }
 .connected { color:#0f0; }
 .disconnected { color:#ff3b3f; }
 
@@ -49,36 +41,33 @@ html, body { margin:0; height:100%; overflow:hidden; font-family:sans-serif; bac
   top: 10px;
   right: 10px;
   background: rgba(0,0,0,0.5);
-  padding: 8px 12px;
-  border-radius: 10px;
+  padding: 10px 16px;
+  border-radius: 12px;
   display: flex;
   align-items: center;
   gap: 10px;
   opacity: 0;
   transition: opacity 0.5s ease;
   z-index: 5;
+  box-shadow: 0 0 12px rgba(0,0,0,0.6);
 }
-
 #audioControl.show { opacity: 1; }
 
 #audioIcon {
-  font-size: 24px;
+  font-size: 26px;
 }
-
 #volumeBarContainer {
   width: 120px;
-  height: 6px;
-  background: #555;
-  border-radius: 3px;
+  height: 8px;
+  background: #444;
+  border-radius: 4px;
   overflow: hidden;
 }
-
 #volumeBar {
   height: 100%;
   width: 50%;
-  background: #0f0;
+  background: linear-gradient(90deg, #0f0, #5fff5f);
   transition: width 0.3s ease;
-  border-radius: 3px;
 }
 </style>
 </head>
@@ -88,7 +77,6 @@ html, body { margin:0; height:100%; overflow:hidden; font-family:sans-serif; bac
 <div id="background"></div>
 <iframe id="player" allowfullscreen allow="autoplay" allow="autoplay; encrypted-media"></iframe>
 <div id="title"><span></span></div>
-<div id="statusText"></div>
 
 <!-- Audio Control UI -->
 <div id="audioControl">
@@ -124,7 +112,6 @@ const background = document.getElementById("background");
 const connectionStatusEl = document.getElementById("connectionStatus");
 const titleEl = document.getElementById("title");
 const titleSpan = titleEl.querySelector("span");
-const statusTextEl = document.getElementById("statusText");
 
 const audioControlEl = document.getElementById("audioControl");
 const audioIconEl = document.getElementById("audioIcon");
@@ -135,15 +122,7 @@ let roomId = localStorage.getItem("roomId") || Math.floor(100000 + Math.random()
 localStorage.setItem("roomId", roomId);
 set(connectionRef,{connected:false, roomId});
 
-let fadeTimeout = null;
-function showStatusText(msg){
-  if(fadeTimeout) clearTimeout(fadeTimeout);
-  statusTextEl.textContent = msg;
-  statusTextEl.style.opacity = 1;
-  fadeTimeout = setTimeout(()=>{ statusTextEl.style.opacity = 0; },4000);
-}
-
-// Audio control display
+// Hiện thanh âm thanh tạm thời
 let audioFadeTimeout=null;
 function showAudioControl(){
   audioControlEl.classList.add("show");
@@ -151,7 +130,7 @@ function showAudioControl(){
   audioFadeTimeout = setTimeout(()=>{ audioControlEl.classList.remove("show"); },3000);
 }
 
-// Reset screen hoàn toàn
+// Reset toàn bộ
 let resetHandled=false;
 onValue(resetRef,snapshot=>{
   if(snapshot.val()===true && !resetHandled){
@@ -168,7 +147,7 @@ onValue(resetRef,snapshot=>{
   }
 });
 
-// Lắng nghe lệnh từ Remote
+// Nhận lệnh từ remote
 onValue(commandRef,snapshot=>{
   const cmd = snapshot.val();
   if(!cmd) return;
@@ -183,15 +162,11 @@ onValue(commandRef,snapshot=>{
     }
     if(cmd.mute!==undefined){
       playerIframe.contentWindow.postMessage(`{"event":"command","func":"${cmd.mute? "mute":"unMute"}","args":""}`,'*');
-      showStatusText(cmd.mute ? "🔇 Tắt tiếng" : "🔊 Bật tiếng");
-
       audioIconEl.textContent = cmd.mute ? "🔇" : "🔊";
       showAudioControl();
     }
     if(cmd.volume!==undefined){
       playerIframe.contentWindow.postMessage(`{"event":"command","func":"setVolume","args":[${cmd.volume}]}`,'*');
-      showStatusText(`🔊 Âm lượng: ${cmd.volume}`);
-
       volumeBarEl.style.width = `${cmd.volume}%`;
       showAudioControl();
     }
@@ -213,7 +188,7 @@ onValue(connectionRef,snapshot=>{
   }
 });
 
-// YouTube IFrame API
+// YouTube API
 let tag=document.createElement('script');
 tag.src="https://www.youtube.com/iframe_api";
 document.body.appendChild(tag);
