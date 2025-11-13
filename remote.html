@@ -15,7 +15,7 @@ h2{ margin-bottom:15px; color:#ff3b3f; border-bottom:2px solid #ff3b3f; padding-
 input{ flex:1; padding:10px; border:2px solid #ff3b3f; border-radius:5px 0 0 5px; font-size:16px; outline:none; }
 button.searchBtn{ padding:10px 14px; border:none; background:#ff3b3f; color:white; border-radius:0 5px 5px 0; cursor:pointer; font-weight:bold; }
 button.searchBtn:hover{ background:#e52a2f; }
-.item{ display:flex; align-items:center; margin-top:10px; background:#ffecec; color:#ff3b3f; padding:8px; border-radius:6px; cursor:pointer; transition:0.2s; }
+.item{ display:flex; align-items:center; margin-top:10px; background:#ffecec; color:#ff3b3f; padding:8px; border-radius:6px; transition:0.2s; }
 .item:hover{ background:#ffd6d6; }
 .item img{ width:80px; height:60px; object-fit:cover; margin-right:12px; border-radius:6px; }
 .title{ font-size:0.95em; line-height:1.2em; flex:1; color:#ff3b3f; }
@@ -57,6 +57,7 @@ button.searchBtn:hover{ background:#e52a2f; }
   <div id="playlistContainer">
     <h2>📋 Playlist</h2>
     <div id="playlist"></div>
+    <button id="playNextBtn" style="margin-top:10px; background:#ff3b3f; color:#fff; padding:6px 12px; border:none; border-radius:4px; cursor:pointer;">▶️ Phát tiếp theo</button>
   </div>
 
   <div class="controls">
@@ -99,6 +100,7 @@ const volumeSlider=document.getElementById("volumeSlider");
 const connectBtn=document.getElementById("connectBtn");
 const disconnectBtn=document.getElementById("disconnectBtn");
 const playlistEl = document.getElementById("playlist");
+const playNextBtn = document.getElementById("playNextBtn");
 let muteState=false;
 
 // Room
@@ -123,6 +125,7 @@ function renderPlaylist(list){
     el.innerHTML = `
       <div class="title">${item.title}</div>
       <div>
+        <button onclick="playNow(${index})">▶️ Phát</button>
         <button onclick="prioritize(${index})">⬆️ Ưu tiên</button>
         <button onclick="removeFromPlaylist(${index})">❌ Xóa</button>
       </div>
@@ -132,10 +135,22 @@ function renderPlaylist(list){
 }
 
 async function addToPlaylist(video){
-  // Chỉ thêm vào playlist, không phát
   const newRef = push(playlistRef);
   await set(newRef, {id: video.id, title: video.title});
   statusEl.textContent=`✅ Đã thêm vào Playlist: ${video.title}`;
+}
+
+async function playVideo(video){
+  // Gửi lệnh phát luôn
+  await addToPlaylist(video); // thêm vào playlist
+  set(commandRef,{
+    id: video.id,
+    title: video.title,
+    play:true,
+    mute:muteState,
+    roomId
+  });
+  statusEl.textContent=`▶️ Đang phát: ${video.title}`;
 }
 
 // Các hàm window để truy cập từ HTML
@@ -160,6 +175,13 @@ window.prioritize = async function(index){
   }
 }
 
+window.playNow = async function(index){
+  const snapshot = await get(playlistRef);
+  const list = snapshot.val() ? Object.values(snapshot.val()) : [];
+  if(!list[index]) return;
+  playVideo(list[index]);
+}
+
 // Lắng nghe playlist từ Firebase
 onValue(playlistRef,snapshot=>{
   const data = snapshot.val();
@@ -182,10 +204,13 @@ async function search(){
       if(!v.id?.videoId) return;
       const el=document.createElement("div");
       el.className="item";
-      el.innerHTML=`<img src="${v.snippet.thumbnails.medium.url}"><div class="title">${v.snippet.title}</div>`;
-      el.onclick=()=>{ 
-        addToPlaylist({id:v.id.videoId,title:v.snippet.title}); // Chỉ thêm, không phát
-      };
+      el.innerHTML=`<img src="${v.snippet.thumbnails.medium.url}"><div class="title">${v.snippet.title}</div>
+      <div>
+        <button class="playBtn">▶️ Phát</button>
+        <button class="addBtn">➕ Thêm</button>
+      </div>`;
+      el.querySelector(".addBtn").onclick=()=> addToPlaylist({id:v.id.videoId,title:v.snippet.title});
+      el.querySelector(".playBtn").onclick=()=> playVideo({id:v.id.videoId,title:v.snippet.title});
       listEl.appendChild(el);
     });
   }catch(err){ console.error(err); statusEl.textContent="⚠️ Lỗi khi tìm kiếm!"; }
@@ -195,9 +220,8 @@ qInput.addEventListener("keypress",e=>{if(e.key==="Enter") search();});
 
 // Controls
 stopBtn.onclick=()=>{ 
-  // Gửi lệnh dừng phát thật sự
   set(commandRef,{
-    id:"",          // xóa video
+    id:"",          
     title:"Intro / Slide",
     play:false,
     mute:muteState,
@@ -207,6 +231,13 @@ stopBtn.onclick=()=>{
 };
 muteBtn.onclick=()=>{ muteState=!muteState; set(commandRef,{mute:muteState,roomId}); muteBtn.textContent=muteState?"🔊 Bật âm thanh":"🔇 Tắt âm thanh"; };
 volumeSlider.oninput=()=>{ set(commandRef,{volume:Number(volumeSlider.value),roomId}); };
+
+// Play next
+playNextBtn.onclick = async function(){
+  const snapshot = await get(playlistRef);
+  const list = snapshot.val() ? Object.values(snapshot.val()) : [];
+  if(list.length>0) playVideo(list[0]);
+}
 
 // Connect / Disconnect
 connectBtn.onclick=()=>{ let room=prompt("Nhập Room ID (6 số) để kết nối:"); if(!room||!/^\d{6}$/.test(room)){alert("Phải nhập đúng Room ID 6 số!"); return;} localStorage.setItem("roomId",room); roomId=room; set(connectionRef,{connected:true,roomId}).then(()=>alert("✅ Đã kết nối Room: "+room)); };
