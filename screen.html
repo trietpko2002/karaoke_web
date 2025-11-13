@@ -14,6 +14,23 @@ html, body { margin:0; height:100%; overflow:hidden; font-family:sans-serif; bac
 #connectionStatus { position:absolute; top:10px; left:10px; font-size:28px; font-weight:bold; text-shadow:0 0 8px #000; z-index:3; }
 .connected { color:#0f0; }
 .disconnected { color:#ff3b3f; }
+
+/* Status text fade out */
+#statusText {
+  position:absolute;
+  top:50%;
+  left:10px;
+  transform:translateY(-50%);
+  background:rgba(0,0,0,0.5);
+  color:#fff;
+  padding:10px 15px;
+  border-radius:8px;
+  font-size:24px;
+  font-weight:bold;
+  opacity:0;
+  transition:opacity 1s ease;
+  z-index:4;
+}
 </style>
 </head>
 <body>
@@ -22,6 +39,7 @@ html, body { margin:0; height:100%; overflow:hidden; font-family:sans-serif; bac
 <div id="background"></div>
 <iframe id="player" allowfullscreen allow="autoplay"></iframe>
 <div id="title"><span></span></div>
+<div id="statusText"></div>
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
@@ -49,11 +67,20 @@ const titleEl = document.getElementById("title");
 const titleSpan = titleEl.querySelector("span");
 const connectionStatusEl = document.getElementById("connectionStatus");
 const background = document.getElementById("background");
+const statusTextEl = document.getElementById("statusText");
 
 let currentVideoId = null;
 let roomId = localStorage.getItem("roomId") || Math.floor(100000 + Math.random()*900000).toString();
 localStorage.setItem("roomId", roomId);
 set(connectionRef,{connected:false, roomId});
+
+let fadeTimeout = null;
+function showStatusText(msg){
+  if(fadeTimeout) clearTimeout(fadeTimeout);
+  statusTextEl.textContent = msg;
+  statusTextEl.style.opacity = 1;
+  fadeTimeout = setTimeout(()=>{ statusTextEl.style.opacity = 0; },5000);
+}
 
 // Set command: play/pause video
 function setCommand(id,title){
@@ -76,12 +103,22 @@ onValue(commandRef,snapshot=>{
   const cmd = snapshot.val();
   if(!cmd) return;
   if(cmd.roomId === roomId){
-    if(cmd.id !== currentVideoId) setCommand(cmd.id,cmd.title);
-    if(cmd.play===false) playerIframe.contentWindow.postMessage('{"event":"command","func":"pauseVideo","args":""}','*');
-    else if(cmd.play===true) playerIframe.contentWindow.postMessage('{"event":"command","func":"playVideo","args":""}','*');
-    if(cmd.mute===true) playerIframe.contentWindow.postMessage('{"event":"command","func":"mute","args":""}','*');
-    else if(cmd.mute===false) playerIframe.contentWindow.postMessage('{"event":"command","func":"unMute","args":""}','*');
-    if(cmd.volume!==undefined) playerIframe.contentWindow.postMessage(`{"event":"command","func":"setVolume","args":[${cmd.volume}]}`,'*');
+    if(cmd.id !== currentVideoId && cmd.id) setCommand(cmd.id,cmd.title);
+    
+    if(cmd.play!==undefined){
+      playerIframe.contentWindow.postMessage(`{"event":"command","func":"${cmd.play? "playVideo":"pauseVideo"}","args":""}`,'*');
+    }
+
+    if(cmd.mute!==undefined){
+      playerIframe.contentWindow.postMessage(`{"event":"command","func":"${cmd.mute? "mute":"unMute"}","args":""}`,'*');
+      showStatusText(cmd.mute ? "🔇 Tắt tiếng" : "🔊 Bật tiếng");
+    }
+
+    if(cmd.volume!==undefined){
+      playerIframe.contentWindow.postMessage(`{"event":"command","func":"setVolume","args":[${cmd.volume}]}`,'*');
+      showStatusText(`🔊 Volume: ${cmd.volume}`);
+    }
+
     set(connectionRef,{connected:true, roomId});
   }
 });
