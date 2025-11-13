@@ -22,6 +22,7 @@ html, body { margin:0; height:100%; overflow:hidden; font-family:sans-serif; bac
 }
 #title span { display:inline-block; padding-left:100%; animation: scrollText 15s linear infinite; }
 @keyframes scrollText { 0%{transform:translateX(0%);} 100%{transform:translateX(-100%);} }
+
 #statusText {  
   position:absolute;
   top:50%;
@@ -37,9 +38,48 @@ html, body { margin:0; height:100%; overflow:hidden; font-family:sans-serif; bac
   transition:opacity 1s ease;
   z-index:4;
 }
+
 #connectionStatus { position:absolute; top:10px; left:10px; font-size:28px; font-weight:bold; text-shadow:0 0 8px #000; z-index:3; }
 .connected { color:#0f0; }
 .disconnected { color:#ff3b3f; }
+
+/* AUDIO CONTROL UI */
+#audioControl {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: rgba(0,0,0,0.5);
+  padding: 8px 12px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  opacity: 0;
+  transition: opacity 0.5s ease;
+  z-index: 5;
+}
+
+#audioControl.show { opacity: 1; }
+
+#audioIcon {
+  font-size: 24px;
+}
+
+#volumeBarContainer {
+  width: 120px;
+  height: 6px;
+  background: #555;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+#volumeBar {
+  height: 100%;
+  width: 50%;
+  background: #0f0;
+  transition: width 0.3s ease;
+  border-radius: 3px;
+}
 </style>
 </head>
 <body>
@@ -50,11 +90,19 @@ html, body { margin:0; height:100%; overflow:hidden; font-family:sans-serif; bac
 <div id="title"><span></span></div>
 <div id="statusText"></div>
 
+<!-- Audio Control UI -->
+<div id="audioControl">
+  <div id="audioIcon">🔊</div>
+  <div id="volumeBarContainer">
+    <div id="volumeBar"></div>
+  </div>
+</div>
+
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
 import { getDatabase, ref, onValue, set } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-database.js";
 
-// Firebase
+// Firebase config
 const firebaseConfig = {
   apiKey: "AIzaSyC1JW_dg-YChaizarbS-7UUN3njFomMPvI",
   authDomain: "karaokeweb-d414b.firebaseapp.com",
@@ -78,6 +126,10 @@ const titleEl = document.getElementById("title");
 const titleSpan = titleEl.querySelector("span");
 const statusTextEl = document.getElementById("statusText");
 
+const audioControlEl = document.getElementById("audioControl");
+const audioIconEl = document.getElementById("audioIcon");
+const volumeBarEl = document.getElementById("volumeBar");
+
 let currentVideoId = null;
 let roomId = localStorage.getItem("roomId") || Math.floor(100000 + Math.random()*900000).toString();
 localStorage.setItem("roomId", roomId);
@@ -89,6 +141,14 @@ function showStatusText(msg){
   statusTextEl.textContent = msg;
   statusTextEl.style.opacity = 1;
   fadeTimeout = setTimeout(()=>{ statusTextEl.style.opacity = 0; },4000);
+}
+
+// Audio control display
+let audioFadeTimeout=null;
+function showAudioControl(){
+  audioControlEl.classList.add("show");
+  if(audioFadeTimeout) clearTimeout(audioFadeTimeout);
+  audioFadeTimeout = setTimeout(()=>{ audioControlEl.classList.remove("show"); },3000);
 }
 
 // Reset screen hoàn toàn
@@ -124,10 +184,16 @@ onValue(commandRef,snapshot=>{
     if(cmd.mute!==undefined){
       playerIframe.contentWindow.postMessage(`{"event":"command","func":"${cmd.mute? "mute":"unMute"}","args":""}`,'*');
       showStatusText(cmd.mute ? "🔇 Tắt tiếng" : "🔊 Bật tiếng");
+
+      audioIconEl.textContent = cmd.mute ? "🔇" : "🔊";
+      showAudioControl();
     }
     if(cmd.volume!==undefined){
       playerIframe.contentWindow.postMessage(`{"event":"command","func":"setVolume","args":[${cmd.volume}]}`,'*');
       showStatusText(`🔊 Âm lượng: ${cmd.volume}`);
+
+      volumeBarEl.style.width = `${cmd.volume}%`;
+      showAudioControl();
     }
     set(connectionRef,{connected:true, roomId});
   }
