@@ -194,7 +194,17 @@ searchBtn.onclick=search;
 qInput.addEventListener("keypress",e=>{if(e.key==="Enter") search();});
 
 // Controls
-stopBtn.onclick=()=>{ set(commandRef,{id:"",title:"Intro / Slide",play:false,mute:muteState,roomId}); statusEl.textContent="⏹️ Đã dừng phát"; };
+stopBtn.onclick=()=>{ 
+  // Gửi lệnh dừng phát thật sự
+  set(commandRef,{
+    id:"",          // xóa video
+    title:"Intro / Slide",
+    play:false,
+    mute:muteState,
+    roomId
+  }); 
+  statusEl.textContent="⏹️ Đã dừng phát"; 
+};
 muteBtn.onclick=()=>{ muteState=!muteState; set(commandRef,{mute:muteState,roomId}); muteBtn.textContent=muteState?"🔊 Bật âm thanh":"🔇 Tắt âm thanh"; };
 volumeSlider.oninput=()=>{ set(commandRef,{volume:Number(volumeSlider.value),roomId}); };
 
