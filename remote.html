@@ -70,7 +70,7 @@ button.searchBtn:hover{ background:#e52a2f; }
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
-import { getDatabase, ref, set, onValue, push, remove, get } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-database.js";
+import { getDatabase, ref, set, onValue, push, remove, get, update } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-database.js";
 
 const firebaseConfig = { 
   apiKey: "AIzaSyC1JW_dg-YChaizarbS-7UUN3njFomMPvI",
@@ -117,17 +117,23 @@ updateDateTime();
 refreshBtn.onclick=()=>location.reload();
 
 // Playlist Functions
+async function getPlaylist(){ 
+  const snapshot = await get(playlistRef);
+  const list = snapshot.val() ? Object.entries(snapshot.val()) : [];
+  return list; // [ [key, {id,title}], ...]
+}
+
 function renderPlaylist(list){
   playlistEl.innerHTML="";
-  list.forEach((item,index)=>{
+  list.forEach(([key,item],index)=>{
     const el = document.createElement("div");
     el.className = "item";
     el.innerHTML = `
       <div class="title">${item.title}</div>
       <div>
-        <button onclick="playNow(${index})">▶️ Phát</button>
-        <button onclick="prioritize(${index})">⬆️ Ưu tiên</button>
-        <button onclick="removeFromPlaylist(${index})">❌ Xóa</button>
+        <button onclick="playNow('${key}')">▶️ Phát</button>
+        <button onclick="prioritize('${key}')">⬆️ Ưu tiên</button>
+        <button onclick="removeFromPlaylist('${key}')">❌ Xóa</button>
       </div>
     `;
     playlistEl.appendChild(el);
@@ -141,8 +147,7 @@ async function addToPlaylist(video){
 }
 
 async function playVideo(video){
-  // Gửi lệnh phát luôn
-  await addToPlaylist(video); // thêm vào playlist
+  // Gửi lệnh phát
   set(commandRef,{
     id: video.id,
     title: video.title,
@@ -154,39 +159,38 @@ async function playVideo(video){
 }
 
 // Các hàm window để truy cập từ HTML
-window.removeFromPlaylist = async function(index){
-  const snapshot = await get(playlistRef);
-  const list = snapshot.val() || [];
-  const key = Object.keys(list)[index];
-  if(key) remove(ref(db,"playlist/"+roomId+"/"+key));
+window.removeFromPlaylist = async function(key){
+  if(!key) return;
+  await remove(ref(db,"playlist/"+roomId+"/"+key));
 }
 
-window.prioritize = async function(index){
+window.prioritize = async function(key){
+  if(!key) return;
   const snapshot = await get(playlistRef);
-  const list = snapshot.val() || [];
-  const keys = Object.keys(list);
+  const list = snapshot.val() ? Object.entries(snapshot.val()) : [];
+  const index = list.findIndex(([k])=>k===key);
   if(index>0){
-    const key1 = keys[index];
-    const key0 = keys[index-1];
-    const temp = list[key1];
-    list[key1] = list[key0];
-    list[key0] = temp;
-    keys.forEach(k=> set(ref(db,"playlist/"+roomId+"/"+k), list[k]));
+    const [[k,item]] = list.splice(index,1); // remove
+    list.unshift([k,item]); // thêm lên đầu
+    // update lại thứ tự
+    for(let [i,[k2,item2]] of list.entries()){
+      await set(ref(db,"playlist/"+roomId+"/"+k2), item2);
+    }
   }
 }
 
-window.playNow = async function(index){
-  const snapshot = await get(playlistRef);
-  const list = snapshot.val() ? Object.values(snapshot.val()) : [];
-  if(!list[index]) return;
-  playVideo(list[index]);
+window.playNow = async function(key){
+  if(!key) return;
+  const snapshot = await get(ref(db,"playlist/"+roomId+"/"+key));
+  if(snapshot.exists()){
+    playVideo(snapshot.val());
+  }
 }
 
 // Lắng nghe playlist từ Firebase
 onValue(playlistRef,snapshot=>{
-  const data = snapshot.val();
-  const list = data ? Object.values(data) : [];
-  renderPlaylist(list);
+  const data = snapshot.val() ? Object.entries(snapshot.val()) : [];
+  renderPlaylist(data);
 });
 
 // Search YouTube
@@ -210,7 +214,7 @@ async function search(){
         <button class="addBtn">➕ Thêm</button>
       </div>`;
       el.querySelector(".addBtn").onclick=()=> addToPlaylist({id:v.id.videoId,title:v.snippet.title});
-      el.querySelector(".playBtn").onclick=()=> playVideo({id:v.id.videoId,title:v.snippet.title});
+      el.querySelector(".playBtn").onclick=()=> { addToPlaylist({id:v.id.videoId,title:v.snippet.title}); playVideo({id:v.id.videoId,title:v.snippet.title}); };
       listEl.appendChild(el);
     });
   }catch(err){ console.error(err); statusEl.textContent="⚠️ Lỗi khi tìm kiếm!"; }
@@ -234,9 +238,11 @@ volumeSlider.oninput=()=>{ set(commandRef,{volume:Number(volumeSlider.value),roo
 
 // Play next
 playNextBtn.onclick = async function(){
-  const snapshot = await get(playlistRef);
-  const list = snapshot.val() ? Object.values(snapshot.val()) : [];
-  if(list.length>0) playVideo(list[0]);
+  const list = await getPlaylist();
+  if(list.length>0){
+    const [key,item] = list[0];
+    playVideo(item);
+  }
 }
 
 // Connect / Disconnect
