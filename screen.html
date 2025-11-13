@@ -35,7 +35,6 @@ html, body {
 .connected { color:#0f0; }
 .disconnected { color:#ff3b3f; }
 
-/* AUDIO CONTROL UI */
 #audioControl {
   position: absolute;
   top: 10px;
@@ -53,22 +52,9 @@ html, body {
 }
 #audioControl.show { opacity: 1; }
 
-#audioIcon {
-  font-size: 26px;
-}
-#volumeBarContainer {
-  width: 120px;
-  height: 8px;
-  background: #444;
-  border-radius: 4px;
-  overflow: hidden;
-}
-#volumeBar {
-  height: 100%;
-  width: 50%;
-  background: linear-gradient(90deg, #0f0, #5fff5f);
-  transition: width 0.3s ease;
-}
+#audioIcon { font-size: 26px; }
+#volumeBarContainer { width: 120px; height: 8px; background: #444; border-radius: 4px; overflow: hidden; }
+#volumeBar { height: 100%; width: 50%; background: linear-gradient(90deg, #0f0, #5fff5f); transition: width 0.3s ease; }
 </style>
 </head>
 <body>
@@ -78,7 +64,6 @@ html, body {
 <iframe id="player" allowfullscreen allow="autoplay" allow="autoplay; encrypted-media"></iframe>
 <div id="title"><span></span></div>
 
-<!-- Audio Control UI -->
 <div id="audioControl">
   <div id="audioIcon">🔊</div>
   <div id="volumeBarContainer">
@@ -117,20 +102,21 @@ const audioControlEl = document.getElementById("audioControl");
 const audioIconEl = document.getElementById("audioIcon");
 const volumeBarEl = document.getElementById("volumeBar");
 
-let currentVideoId = null;
+// Room ID
 let roomId = localStorage.getItem("roomId") || Math.floor(100000 + Math.random()*900000).toString();
 localStorage.setItem("roomId", roomId);
+connectionStatusEl.textContent = `Room ID: ${roomId} (Chưa kết nối)`;
 set(connectionRef,{connected:false, roomId});
 
-// Hiện thanh âm thanh tạm thời
+// Audio control
 let audioFadeTimeout=null;
 function showAudioControl(){
   audioControlEl.classList.add("show");
   if(audioFadeTimeout) clearTimeout(audioFadeTimeout);
-  audioFadeTimeout = setTimeout(()=>{ audioControlEl.classList.remove("show"); },3000);
+  audioFadeTimeout = setTimeout(()=> audioControlEl.classList.remove("show"),3000);
 }
 
-// Reset toàn bộ
+// Reset screen
 let resetHandled=false;
 onValue(resetRef,snapshot=>{
   if(snapshot.val()===true && !resetHandled){
@@ -143,35 +129,38 @@ onValue(resetRef,snapshot=>{
     background.style.display='block';
 
     set(resetRef,false);
-    setTimeout(()=>{ resetHandled=false; }, 500);
+    setTimeout(()=>{ resetHandled=false; },500);
   }
 });
 
-// Nhận lệnh từ remote
+// Command listener
+let currentVideoId=null;
 onValue(commandRef,snapshot=>{
   const cmd = snapshot.val();
-  if(!cmd) return;
-  if(cmd.roomId === roomId){
-    if(cmd.id && cmd.id !== currentVideoId){
-      currentVideoId = cmd.id;
-      playerIframe.src = `https://www.youtube.com/embed/${cmd.id}?autoplay=1&controls=0&rel=0&modestbranding=1&fs=0&disablekb=1&iv_load_policy=3`;
-      playerIframe.style.display='block';
-      background.style.display='none';
-      titleEl.style.display='block';
-      titleSpan.textContent = `🎵 Đang phát: ${cmd.title}`;
-    }
-    if(cmd.mute!==undefined){
-      playerIframe.contentWindow.postMessage(`{"event":"command","func":"${cmd.mute? "mute":"unMute"}","args":""}`,'*');
-      audioIconEl.textContent = cmd.mute ? "🔇" : "🔊";
-      showAudioControl();
-    }
-    if(cmd.volume!==undefined){
-      playerIframe.contentWindow.postMessage(`{"event":"command","func":"setVolume","args":[${cmd.volume}]}`,'*');
-      volumeBarEl.style.width = `${cmd.volume}%`;
-      showAudioControl();
-    }
-    set(connectionRef,{connected:true, roomId});
+  if(!cmd || cmd.roomId !== roomId) return;
+
+  if(cmd.id && cmd.id !== currentVideoId){
+    currentVideoId = cmd.id;
+    playerIframe.src = `https://www.youtube.com/embed/${cmd.id}?autoplay=1&controls=0&rel=0&modestbranding=1&fs=0&disablekb=1&iv_load_policy=3`;
+    playerIframe.style.display='block';
+    background.style.display='none';
+    titleEl.style.display='block';
+    titleSpan.textContent = `🎵 Đang phát: ${cmd.title}`;
   }
+
+  if(cmd.mute!==undefined){
+    playerIframe.contentWindow.postMessage(`{"event":"command","func":"${cmd.mute? "mute":"unMute"}","args":""}`,'*');
+    audioIconEl.textContent = cmd.mute ? "🔇" : "🔊";
+    showAudioControl();
+  }
+
+  if(cmd.volume!==undefined){
+    playerIframe.contentWindow.postMessage(`{"event":"command","func":"setVolume","args":[${cmd.volume}]}`,'*');
+    volumeBarEl.style.width = `${cmd.volume}%`;
+    showAudioControl();
+  }
+
+  set(connectionRef,{connected:true, roomId});
 });
 
 // Connection status
@@ -188,7 +177,7 @@ onValue(connectionRef,snapshot=>{
   }
 });
 
-// YouTube API
+// Load YouTube API
 let tag=document.createElement('script');
 tag.src="https://www.youtube.com/iframe_api";
 document.body.appendChild(tag);
