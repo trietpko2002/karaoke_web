@@ -3,167 +3,61 @@
 <head>
 <meta charset="UTF-8">
 <title>Karaoke Screen</title>
-<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
-html, body {
-  margin: 0;
-  height: 100%;
-  background: #000;
-  overflow: hidden;
-  color: #fff;
-  font-family: sans-serif;
-}
-#background {
-  position: absolute;
-  top: 0; left: 0;
-  width: 100%; height: 100%;
-  background: url('background.png') no-repeat center center;
-  background-size: contain;
-  z-index: 0;
-  opacity: 1;
-  transition: opacity 1s ease;
-}
-#player {
-  position: absolute;
-  top: 0; left: 0;
-  width: 100%; height: 100%;
-  border: none;
-  display: none;
-  opacity: 0;
-  z-index: 1;
-  transition: opacity 1s ease;
-}
-#titlePopup {
-  position: absolute;
-  bottom: 50px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: rgba(0,0,0,0.7);
-  padding: 15px 20px;
-  font-size: 28px;
-  font-weight: bold;
-  border-radius: 10px;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 1s ease;
-  z-index: 2;
-}
-#totalCount {
-  position: absolute;
-  top: 20px;
-  right: 20px;
-  font-size: 24px;
-  font-weight: bold;
-  background: rgba(0,0,0,0.5);
-  padding: 8px 12px;
-  border-radius: 8px;
-  z-index: 2;
-  opacity: 0;
-  transition: opacity 1s ease;
-}
+html,body {margin:0;height:100%;background:#000;overflow:hidden;color:#fff;font-family:sans-serif;text-align:center;}
+#bg {position:absolute;top:0;left:0;right:0;bottom:0;background:url('https://picsum.photos/1920/1080?blur') center/cover;transition:opacity 1s ease;}
+#videoFrame {position:absolute;top:0;left:0;width:100%;height:100%;border:none;display:none;transition:opacity 1s ease;}
+#overlay {position:absolute;bottom:20px;width:100%;text-align:center;font-size:2em;}
+#songName {display:inline-block;white-space:nowrap;overflow:hidden;animation:marquee 15s linear infinite;}
+@keyframes marquee {0%{transform:translateX(100%);}100%{transform:translateX(-100%);}}
+#stats {position:absolute;top:10px;left:10px;font-size:1.2em;background:rgba(0,0,0,0.5);padding:8px 12px;border-radius:8px;}
+.fade {opacity:0;pointer-events:none;}
 </style>
 </head>
 <body>
+<div id="bg"></div>
+<iframe id="videoFrame"></iframe>
+<div id="overlay"><span id="songName"></span></div>
+<div id="stats">
+  Room: <span id="room"></span><br>
+  Đã hát: <span id="count">0</span> bài
+</div>
+<script>
+const room = prompt("Nhập Room ID:");
+document.getElementById("room").innerText = room;
+let count = 0;
+const video = document.getElementById("videoFrame");
+const bg = document.getElementById("bg");
+const songName = document.getElementById("songName");
 
-<div id="background"></div>
-<iframe id="player" allowfullscreen allow="autoplay"></iframe>
-<div id="titlePopup"></div>
-<div id="totalCount">🎵 0 bài đã hát</div>
+function fadeOut(el){el.classList.add('fade');}
+function fadeIn(el){el.classList.remove('fade');}
 
-<script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
-import { getDatabase, ref, onValue, set } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-database.js";
-
-const firebaseConfig = {
-  apiKey: "AIzaSyC1JW_dg-YChaizarbS-7UUN3njFomMPvI",
-  authDomain: "karaokeweb-d414b.firebaseapp.com",
-  databaseURL: "https://karaokeweb-d414b-default-rtdb.asia-southeast1.firebasedatabase.app",
-  projectId: "karaokeweb-d414b",
-  storageBucket: "karaokeweb-d414b.appspot.com",
-  messagingSenderId: "183555717781",
-  appId: "1:183555717781:web:d3920b342c5d27e107f99c",
-  measurementId: "G-VZ228HB7GF"
-};
-const app = initializeApp(firebaseConfig);
-const db = getDatabase(app);
-const commandRef = ref(db, "command");
-
-const player = document.getElementById("player");
-const background = document.getElementById("background");
-const titlePopup = document.getElementById("titlePopup");
-const totalCountEl = document.getElementById("totalCount");
-
-let totalCount = 0;
-let fadeTimeout = null;
-
-function showTitlePopup(text) {
-  titlePopup.textContent = text;
-  titlePopup.style.opacity = 1;
-  if (fadeTimeout) clearTimeout(fadeTimeout);
-  fadeTimeout = setTimeout(() => { titlePopup.style.opacity = 0; }, 4000);
-}
-
-function updateTotalCount() {
-  totalCountEl.textContent = `🎵 ${totalCount} bài đã hát`;
-  totalCountEl.style.opacity = 1;
-  setTimeout(() => { totalCountEl.style.opacity = 0.8; }, 1500);
-}
-
-// Theo dõi lệnh từ Remote
-onValue(commandRef, snapshot => {
-  const cmd = snapshot.val();
-  if (!cmd) return;
-
-  if (cmd.resetTotal) {
-    totalCount = 0;
-    updateTotalCount();
-    showTitlePopup("🔁 Đã reset bộ đếm");
-    return;
-  }
-
-  if (!cmd.id) { // Dừng phát
-    player.style.opacity = 0;
-    setTimeout(() => {
-      player.style.display = 'none';
-      background.style.opacity = 1;
-    }, 1000);
-    showTitlePopup("⏹️ Kết thúc bài hát / Intro");
-    return;
-  }
-
-  // Phát bài mới
-  player.src = `https://www.youtube.com/embed/${cmd.id}?autoplay=1&controls=0&modestbranding=1&rel=0&fs=0&enablejsapi=1`;
-  player.style.display = 'block';
-  background.style.opacity = 0;
-  setTimeout(() => { player.style.opacity = 1; }, 50);
-
-  totalCount += 1;
-  updateTotalCount();
-  showTitlePopup(`🎶 Đang phát: ${cmd.title}`);
-});
-
-// Load YouTube API
-let tag = document.createElement('script');
-tag.src = "https://www.youtube.com/iframe_api";
-document.body.appendChild(tag);
-
-window.onYouTubeIframeAPIReady = () => {
-  window.ytPlayer = new YT.Player('player', {
-    events: {
-      'onStateChange': e => {
-        if (e.data === YT.PlayerState.ENDED) {
-          // Khi video kết thúc thì fade về background
-          player.style.opacity = 0;
-          setTimeout(() => {
-            player.style.display = 'none';
-            background.style.opacity = 1;
-            showTitlePopup("🎬 Bài hát đã kết thúc");
-          }, 1000);
-        }
-      }
+window.addEventListener('storage', e=>{
+  if(e.key === 'karaoke_action_'+room){
+    const data = JSON.parse(e.newValue || "{}");
+    if(data.type==="play"){
+      fadeOut(bg);
+      songName.textContent = "Đang phát: "+data.title;
+      video.src = `https://www.youtube.com/embed/${data.id}?autoplay=1&enablejsapi=1`;
+      video.style.display="block"; fadeIn(video);
+      count++; document.getElementById("count").innerText=count;
     }
-  });
-};
+    else if(data.type==="stop"){
+      fadeOut(video);
+      setTimeout(()=>{
+        video.src=""; video.style.display="none";
+        songName.textContent="";
+        fadeIn(bg);
+      },800);
+    }
+    else if(data.type==="reset"){
+      count=0;
+      document.getElementById("count").innerText=0;
+    }
+  }
+});
 </script>
 </body>
 </html>
