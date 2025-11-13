@@ -85,6 +85,7 @@ const songCountEl = document.getElementById("songCount");
 
 let currentVideoId = null;
 let songCount = 0;
+let ytPlayer = null;
 
 let roomId = localStorage.getItem("roomId") || Math.floor(100000 + Math.random()*900000).toString();
 localStorage.setItem("roomId", roomId);
@@ -118,21 +119,32 @@ function setCommand(id,title){
   }
 }
 
+// Khi bài hát kết thúc → quay lại background
+function onPlayerStateChange(event) {
+  // 0 = ENDED
+  if (event.data === 0) {
+    playerIframe.style.display = 'none';
+    titleEl.style.display = 'none';
+    background.style.display = 'block';
+    showStatusText("✅ Hết bài — trở về màn hình chính");
+  }
+}
+
 // Lắng nghe lệnh từ Remote
 onValue(commandRef,snapshot=>{
   const cmd = snapshot.val();
   if(!cmd) return;
   if(cmd.roomId === roomId){
     if(cmd.id !== currentVideoId && cmd.id) setCommand(cmd.id,cmd.title);
-    if(cmd.play!==undefined){
-      playerIframe.contentWindow.postMessage(`{"event":"command","func":"${cmd.play? "playVideo":"pauseVideo"}","args":""}`,'*');
+    if(cmd.play!==undefined && ytPlayer){
+      cmd.play ? ytPlayer.playVideo() : ytPlayer.pauseVideo();
     }
-    if(cmd.mute!==undefined){
-      playerIframe.contentWindow.postMessage(`{"event":"command","func":"${cmd.mute? "mute":"unMute"}","args":""}`,'*');
+    if(cmd.mute!==undefined && ytPlayer){
+      cmd.mute ? ytPlayer.mute() : ytPlayer.unMute();
       showStatusText(cmd.mute ? "🔇 Tắt tiếng" : "🔊 Bật tiếng");
     }
-    if(cmd.volume!==undefined){
-      playerIframe.contentWindow.postMessage(`{"event":"command","func":"setVolume","args":[${cmd.volume}]}`,'*');
+    if(cmd.volume!==undefined && ytPlayer){
+      ytPlayer.setVolume(cmd.volume);
       showStatusText(`🔊 Âm lượng: ${cmd.volume}`);
     }
     set(connectionRef,{connected:true, roomId});
@@ -161,14 +173,15 @@ onValue(connectionRef,snapshot=>{
 });
 
 // Load YouTube IFrame API
-let tag=document.createElement('script');
+window.onYouTubeIframeAPIReady = function(){
+  ytPlayer = new YT.Player('player', {
+    events: { 'onStateChange': onPlayerStateChange }
+  });
+};
+const tag=document.createElement('script');
 tag.src="https://www.youtube.com/iframe_api";
 document.body.appendChild(tag);
-function onYouTubeIframeAPIReady(){
-  window.player=new YT.Player('player', {
-    events:{'onReady':()=>{},'onStateChange':()=>{}}
-  });
-}
+
 </script>
 </body>
 </html>
