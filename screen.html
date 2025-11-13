@@ -14,6 +14,7 @@ html, body { margin:0; height:100%; overflow:hidden; font-family:sans-serif; bac
 #connectionStatus { position:absolute; top:10px; left:10px; font-size:28px; font-weight:bold; text-shadow:0 0 8px #000; z-index:3; }
 .connected { color:#0f0; }
 .disconnected { color:#ff3b3f; }
+
 #statusText {
   position:absolute;
   top:50%;
@@ -29,6 +30,7 @@ html, body { margin:0; height:100%; overflow:hidden; font-family:sans-serif; bac
   transition:opacity 1s ease;
   z-index:4;
 }
+
 #songCount {
   position:absolute;
   top:10px;
@@ -45,7 +47,7 @@ html, body { margin:0; height:100%; overflow:hidden; font-family:sans-serif; bac
 
 <div id="connectionStatus">Room ID: ——— (Chưa kết nối)</div>
 <div id="background"></div>
-<div id="player"></div>
+<iframe id="player" allowfullscreen allow="autoplay" allow="autoplay; encrypted-media"></iframe>
 <div id="title"><span></span></div>
 <div id="statusText"></div>
 <div id="songCount">Đã hát: 0 bài</div>
@@ -72,7 +74,7 @@ const connectionRef = ref(db,"connectionStatus");
 const resetRef = ref(db,"resetScreen");
 
 // DOM
-const playerDiv = document.getElementById("player");
+const playerIframe = document.getElementById("player");
 const titleEl = document.getElementById("title");
 const titleSpan = titleEl.querySelector("span");
 const connectionStatusEl = document.getElementById("connectionStatus");
@@ -82,6 +84,7 @@ const songCountEl = document.getElementById("songCount");
 
 let currentVideoId = null;
 let songCount = 0;
+
 let roomId = localStorage.getItem("roomId") || Math.floor(100000 + Math.random()*900000).toString();
 localStorage.setItem("roomId", roomId);
 set(connectionRef,{connected:false, roomId});
@@ -94,58 +97,56 @@ function showStatusText(msg){
   fadeTimeout = setTimeout(()=>{ statusTextEl.style.opacity = 0; },4000);
 }
 
-// YouTube Player
-let player;
-function loadVideo(id,title){
+// Set video
+function setCommand(id,title){
   currentVideoId=id;
   if(!id){
-    playerDiv.style.display='none';
+    playerIframe.style.display='none';
     titleEl.style.display='none';
     background.style.display='block';
   } else {
     songCount++;
     songCountEl.textContent = `Đã hát: ${songCount} bài`;
-    titleSpan.textContent = title;
+    playerIframe.src = `https://www.youtube.com/embed/${id}?autoplay=1&controls=0&modestbranding=1&rel=0&fs=0&enablejsapi=1`;
     background.style.display='none';
+    playerIframe.style.display='block';
     titleEl.style.display='block';
-    playerDiv.style.display='block';
+    titleSpan.textContent = title;
     showStatusText(`🎵 Đang phát: ${title}`);
-    if(player){
-      player.loadVideoById(id);
-    } else {
-      player = new YT.Player('player',{
-        videoId:id,
-        width:'100%',
-        height:'100%',
-        playerVars:{autoplay:1,controls:0,rel:0,modestbranding:1},
-        events:{
-          'onStateChange': onPlayerStateChange
-        }
-      });
-    }
   }
 }
 
-// Video ended → bg
-function onPlayerStateChange(event){
-  if(event.data===YT.PlayerState.ENDED){
-    playerDiv.style.display='none';
-    titleEl.style.display='none';
-    background.style.display='block';
+// Listen command from Remote
+let resetHandled=false; // thêm biến để chỉ reset 1 lần
+onValue(resetRef,snapshot=>{
+  if(snapshot.val()===true && !resetHandled){
+    resetHandled=true; // đánh dấu đã xử lý
+    location.reload();
+    set(resetRef,false); // reset Firebase về false ngay
   }
-}
+});
 
-// Listen Remote Commands
 onValue(commandRef,snapshot=>{
   const cmd = snapshot.val();
   if(!cmd) return;
   if(cmd.roomId === roomId){
-    if(cmd.resetScreen){ location.reload(); return; }
-    if(cmd.resetTotal){ songCount=0; songCountEl.textContent='Đã hát: 0 bài'; showStatusText("♻️ Đã reset số bài!"); }
-    if(cmd.id && cmd.id !== currentVideoId) loadVideo(cmd.id,cmd.title);
-    if(cmd.play!==undefined && player){ cmd.play ? player.playVideo() : player.pauseVideo(); }
-    if(cmd.mute!==undefined && player){ cmd.mute ? player.mute() : player.unMute(); showStatusText(cmd.mute ? "🔇 Tắt tiếng" : "🔊 Bật tiếng"); }
-    if(cmd.volume!==undefined && player){ player.setVolume(cmd.volume); showStatusText(`🔊 Âm lượng: ${cmd.volume}`); }
+    if(cmd.resetTotal){ 
+      songCount=0; 
+      songCountEl.textContent='Đã hát: 0 bài'; 
+      showStatusText("♻️ Đã reset số bài!"); 
+    }
+    if(cmd.id && cmd.id !== currentVideoId) setCommand(cmd.id,cmd.title);
+    if(cmd.play!==undefined){
+      playerIframe.contentWindow.postMessage(`{"event":"command","func":"${cmd.play? "playVideo":"pauseVideo"}","args":""}`,'*');
+    }
+    if(cmd.mute!==undefined){
+      playerIframe.contentWindow.postMessage(`{"event":"command","func":"${cmd.mute? "mute":"unMute"}","args":""}`,'*');
+      showStatusText(cmd.mute ? "🔇 Tắt tiếng" : "🔊 Bật tiếng");
+    }
+    if(cmd.volume!==undefined){
+      playerIframe.contentWindow.postMessage(`{"event":"command","func":"setVolume","args":[${cmd.volume}]}`,'*');
+      showStatusText(`🔊 Âm lượng: ${cmd.volume}`);
+    }
     set(connectionRef,{connected:true, roomId});
   }
 });
@@ -164,15 +165,25 @@ onValue(connectionRef,snapshot=>{
   }
 });
 
-// Reset Screen listener
-onValue(resetRef,snap=>{
-  if(snap.val()===true){ location.reload(); }
-});
-
-// Load YouTube API
+// YouTube IFrame API
 let tag=document.createElement('script');
 tag.src="https://www.youtube.com/iframe_api";
 document.body.appendChild(tag);
+
+function onYouTubeIframeAPIReady(){
+  window.player=new YT.Player('player',{
+    events:{
+      'onReady':()=>{},
+      'onStateChange': e=>{
+        if(e.data===YT.PlayerState.ENDED){
+          playerIframe.style.display='none';
+          titleEl.style.display='none';
+          background.style.display='block';
+        }
+      }
+    }
+  });
+}
 </script>
 </body>
 </html>
