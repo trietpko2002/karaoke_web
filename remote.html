@@ -113,8 +113,6 @@ button.searchBtn:hover { background:#e52a2f; }
   <div id="list"></div>
 
   <div class="controls">
-    <button id="muteBtn">🔇 Tắt/Bật âm thanh</button>
-    <input type="range" min="0" max="100" value="100" id="volumeSlider">
     <button id="connectBtn">🔗 Kết nối Room</button>
     <button id="disconnectBtn">❌ Ngắt kết nối</button>
   </div>
@@ -186,7 +184,9 @@ async function search() {
       el.className = "item";
       el.innerHTML = `<img src="${v.snippet.thumbnails.medium.url}"><div class="title">${v.snippet.title}</div>`;
       el.onclick = () => {
-        set(commandRef, { id: v.id.videoId, title: v.snippet.title, play: true, mute: muteState });
+        const roomId = localStorage.getItem("roomId");
+        if(!roomId){ alert("Chưa kết nối Room!"); return; }
+        set(commandRef, { id: v.id.videoId, title: v.snippet.title, play: true, mute: muteState, roomId });
         statusEl.textContent = "▶️ Đang phát: " + v.snippet.title;
       };
       listEl.appendChild(el);
@@ -202,21 +202,27 @@ searchBtn.onclick = search;
 qInput.addEventListener("keypress", e => { if (e.key === "Enter") search(); });
 
 stopBtn.onclick = () => {
-  set(commandRef, { id: "", title: "Intro / Slide", play: false, mute: muteState });
+  const roomId = localStorage.getItem("roomId");
+  if(!roomId){ alert("Chưa kết nối Room!"); return; }
+  set(commandRef, { id: "", title: "Intro / Slide", play: false, mute: muteState, roomId });
   statusEl.textContent = "⏹️ Đã dừng phát";
 };
 
 muteBtn.onclick = () => {
   muteState = !muteState;
-  set(commandRef, { mute: muteState });
+  const roomId = localStorage.getItem("roomId");
+  if(!roomId){ alert("Chưa kết nối Room!"); return; }
+  set(commandRef, { mute: muteState, roomId });
   muteBtn.textContent = muteState ? "🔊 Bật âm thanh" : "🔇 Tắt âm thanh";
 };
 
 volumeSlider.oninput = () => {
-  set(commandRef, { volume: Number(volumeSlider.value) });
+  const roomId = localStorage.getItem("roomId");
+  if(!roomId){ alert("Chưa kết nối Room!"); return; }
+  set(commandRef, { volume: Number(volumeSlider.value), roomId });
 };
 
-// --- Kết nối Room nhập tay ---
+// --- Kết nối Room ---
 connectBtn.onclick = () => {
   let room = prompt("Nhập Room ID (6 số) để kết nối:");
   if(!room || !/^\d{6}$/.test(room)){
