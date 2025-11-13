@@ -56,7 +56,7 @@ html, body { margin:0; height:100%; overflow:hidden; font-family:sans-serif; bac
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
 import { getDatabase, ref, onValue, set } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-database.js";
 
-// Firebase cấu hình của bạn
+// Firebase
 const firebaseConfig = {
   apiKey: "AIzaSyC1JW_dg-YChaizarbS-7UUN3njFomMPvI",
   authDomain: "karaokeweb-d414b.firebaseapp.com",
@@ -67,14 +67,13 @@ const firebaseConfig = {
   appId: "1:183555717781:web:d3920b342c5d27e107f99c",
   measurementId: "G-VZ228HB7GF"
 };
-
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
-
 const commandRef = ref(db,"command");
 const connectionRef = ref(db,"connectionStatus");
 const resetRef = ref(db,"resetScreen");
 
+// DOM
 const playerIframe = document.getElementById("player");
 const titleEl = document.getElementById("title");
 const titleSpan = titleEl.querySelector("span");
@@ -85,13 +84,11 @@ const songCountEl = document.getElementById("songCount");
 
 let currentVideoId = null;
 let songCount = 0;
-let ytPlayer = null;
 
 let roomId = localStorage.getItem("roomId") || Math.floor(100000 + Math.random()*900000).toString();
 localStorage.setItem("roomId", roomId);
 set(connectionRef,{connected:false, roomId});
 
-// Hiện popup status fade
 let fadeTimeout = null;
 function showStatusText(msg){
   if(fadeTimeout) clearTimeout(fadeTimeout);
@@ -100,7 +97,7 @@ function showStatusText(msg){
   fadeTimeout = setTimeout(()=>{ statusTextEl.style.opacity = 0; },4000);
 }
 
-// Set video đang phát
+// Set video
 function setCommand(id,title){
   currentVideoId=id;
   if(!id){
@@ -119,46 +116,30 @@ function setCommand(id,title){
   }
 }
 
-// Khi bài hát kết thúc → quay lại background
-function onPlayerStateChange(event) {
-  // 0 = ENDED
-  if (event.data === 0) {
-    playerIframe.style.display = 'none';
-    titleEl.style.display = 'none';
-    background.style.display = 'block';
-    showStatusText("✅ Hết bài — trở về màn hình chính");
-  }
-}
-
-// Lắng nghe lệnh từ Remote
+// Listen command from Remote
 onValue(commandRef,snapshot=>{
   const cmd = snapshot.val();
   if(!cmd) return;
   if(cmd.roomId === roomId){
-    if(cmd.id !== currentVideoId && cmd.id) setCommand(cmd.id,cmd.title);
-    if(cmd.play!==undefined && ytPlayer){
-      cmd.play ? ytPlayer.playVideo() : ytPlayer.pauseVideo();
+    if(cmd.resetScreen){ location.reload(); return; }
+    if(cmd.resetTotal){ songCount=0; songCountEl.textContent='Đã hát: 0 bài'; showStatusText("♻️ Đã reset số bài!"); }
+    if(cmd.id && cmd.id !== currentVideoId) setCommand(cmd.id,cmd.title);
+    if(cmd.play!==undefined){
+      playerIframe.contentWindow.postMessage(`{"event":"command","func":"${cmd.play? "playVideo":"pauseVideo"}","args":""}`,'*');
     }
-    if(cmd.mute!==undefined && ytPlayer){
-      cmd.mute ? ytPlayer.mute() : ytPlayer.unMute();
+    if(cmd.mute!==undefined){
+      playerIframe.contentWindow.postMessage(`{"event":"command","func":"${cmd.mute? "mute":"unMute"}","args":""}`,'*');
       showStatusText(cmd.mute ? "🔇 Tắt tiếng" : "🔊 Bật tiếng");
     }
-    if(cmd.volume!==undefined && ytPlayer){
-      ytPlayer.setVolume(cmd.volume);
+    if(cmd.volume!==undefined){
+      playerIframe.contentWindow.postMessage(`{"event":"command","func":"setVolume","args":[${cmd.volume}]}`,'*');
       showStatusText(`🔊 Âm lượng: ${cmd.volume}`);
     }
     set(connectionRef,{connected:true, roomId});
   }
 });
 
-// Khi remote gửi resetScreen → reload
-onValue(resetRef, snap=>{
-  if(snap.val() === true){
-    location.reload();
-  }
-});
-
-// Kết nối trạng thái room
+// Connection status
 onValue(connectionRef,snapshot=>{
   const data = snapshot.val();
   if(data?.connected){
@@ -172,16 +153,26 @@ onValue(connectionRef,snapshot=>{
   }
 });
 
-// Load YouTube IFrame API
-window.onYouTubeIframeAPIReady = function(){
-  ytPlayer = new YT.Player('player', {
-    events: { 'onStateChange': onPlayerStateChange }
-  });
-};
-const tag=document.createElement('script');
+// YouTube IFrame API
+let tag=document.createElement('script');
 tag.src="https://www.youtube.com/iframe_api";
 document.body.appendChild(tag);
 
+function onYouTubeIframeAPIReady(){
+  window.player=new YT.Player('player',{
+    events:{
+      'onReady':()=>{},
+      'onStateChange': e=>{
+        // Video ended → về background
+        if(e.data===YT.PlayerState.ENDED){
+          playerIframe.style.display='none';
+          titleEl.style.display='none';
+          background.style.display='block';
+        }
+      }
+    }
+  });
+}
 </script>
 </body>
 </html>
