@@ -40,7 +40,7 @@ button.searchBtn:hover{ background:#e52a2f; }
     <input id="q" placeholder="Nhập từ khóa..." />
     <button class="searchBtn" id="searchBtn">🔍</button>
     <button id="playBtn">▶️ Phát & Thêm</button>
-    <button id="stopBtn">⏹️ Dừng</button>
+    <button id="resetScreenBtn">🔄 Reset Screen</button>
   </div>
   <div style="margin-top:10px;">
     <input type="checkbox" id="karaokeOnly" checked />
@@ -72,7 +72,6 @@ const firebaseConfig = {
   appId: "1:183555717781:web:d3920b342c5d27e107f99c",
   measurementId: "G-VZ228HB7GF"
 };
-
 const API_KEY = "AIzaSyALYcXF9pG01RbeCx6DaZADNwNro2NKq4I";
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
@@ -83,7 +82,7 @@ const connectionRef = ref(db, "connectionStatus");
 const qInput=document.getElementById("q");
 const searchBtn=document.getElementById("searchBtn");
 const playBtn=document.getElementById("playBtn");
-const stopBtn=document.getElementById("stopBtn");
+const resetScreenBtn=document.getElementById("resetScreenBtn");
 const listEl=document.getElementById("list");
 const statusEl=document.getElementById("status");
 const muteBtn=document.getElementById("muteBtn");
@@ -96,7 +95,7 @@ const resetBtn=document.getElementById("resetBtn");
 let roomId = localStorage.getItem("roomId") || Math.floor(100000 + Math.random()*900000).toString();
 localStorage.setItem("roomId", roomId);
 
-// Ngày giờ
+// Ngày giờ & Refresh
 const dateTimeEl=document.getElementById("dateTime");
 const refreshBtn=document.getElementById("refreshBtn");
 function updateDateTime(){ const now=new Date(); dateTimeEl.textContent=now.toLocaleString(); }
@@ -132,7 +131,7 @@ async function search(){
 searchBtn.onclick=search;
 qInput.addEventListener("keypress",e=>{if(e.key==="Enter") search();});
 
-// Play
+// Phát
 playBtn.onclick=()=>{
   const id = qInput.dataset.selectedId;
   const title = qInput.dataset.selectedTitle;
@@ -141,45 +140,34 @@ playBtn.onclick=()=>{
   statusEl.textContent=`▶️ Phát bài: ${title}`;
 };
 
-// Stop
-stopBtn.onclick=()=>{
-  set(commandRef,{id:"",title:"",play:false,roomId});
-  statusEl.textContent="⏹️ Dừng phát, trở về màn hình nền";
+// 🔄 Reset Screen
+resetScreenBtn.onclick=()=>{
+  if(confirm("Bạn có chắc muốn reload lại màn hình Screen không?")){
+    set(commandRef,{resetScreen:true,roomId});
+    statusEl.textContent="🔄 Đã gửi lệnh reset screen!";
+  }
 };
 
 // Mute/Volume
 let muteState=false;
-muteBtn.onclick=()=>{ 
-  muteState=!muteState; 
-  set(commandRef,{mute:muteState,roomId}); 
-  muteBtn.textContent=muteState?"🔊 Bật âm thanh":"🔇 Tắt âm thanh"; 
-};
+muteBtn.onclick=()=>{ muteState=!muteState; set(commandRef,{mute:muteState,roomId}); muteBtn.textContent=muteState?"🔊 Bật âm thanh":"🔇 Tắt âm thanh"; };
 volumeSlider.oninput=()=>{ set(commandRef,{volume:Number(volumeSlider.value),roomId}); };
 
 // Connect/Disconnect
-connectBtn.onclick=()=>{ 
-  let room=prompt("Nhập Room ID (6 số) để kết nối:"); 
-  if(!room||!/^\d{6}$/.test(room)){alert("Phải nhập đúng Room ID 6 số!"); return;} 
-  localStorage.setItem("roomId",room); roomId=room; 
-  set(connectionRef,{connected:true,roomId}).then(()=>alert("✅ Đã kết nối Room: "+room)); 
-};
-disconnectBtn.onclick=()=>{ 
-  let room=localStorage.getItem("roomId"); 
-  if(!room){alert("Chưa có Room nào kết nối!"); return;} 
-  set(connectionRef,{connected:false,roomId:""}).then(()=>{localStorage.removeItem("roomId"); alert("❌ Đã ngắt kết nối Room: "+room);}); 
-};
+connectBtn.onclick=()=>{ let room=prompt("Nhập Room ID (6 số) để kết nối:"); if(!room||!/^\d{6}$/.test(room)){alert("Phải nhập đúng Room ID 6 số!"); return;} localStorage.setItem("roomId",room); roomId=room; set(connectionRef,{connected:true,roomId}).then(()=>alert("✅ Đã kết nối Room: "+room)); };
+disconnectBtn.onclick=()=>{ let room=localStorage.getItem("roomId"); if(!room){alert("Chưa có Room nào kết nối!"); return;} set(connectionRef,{connected:false,roomId:""}).then(()=>{localStorage.removeItem("roomId"); alert("❌ Đã ngắt kết nối Room: "+room);}); };
 
-// Reset đếm số bài
+// Reset số bài
 resetBtn.onclick=()=> {
-  if(confirm("Bạn có muốn reset số bài đã phát về 0 không?")){
+  if(confirm("Reset số bài đã phát về 0?")){
     set(commandRef,{resetTotal:true,roomId});
-    statusEl.textContent="♻️ Đã reset số bài về 0";
+    statusEl.textContent="♻️ Đã gửi lệnh reset số bài!";
   }
 };
 
-// Listen trạng thái âm lượng
+// Sync trạng thái
 onValue(commandRef,snapshot=>{
-  const cmd = snapshot.val();
+  const cmd=snapshot.val();
   if(!cmd) return;
   muteBtn.textContent=cmd.mute?"🔊 Bật âm thanh":"🔇 Tắt âm thanh";
   volumeSlider.value=cmd.volume??100;
