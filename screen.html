@@ -14,8 +14,6 @@ html, body { margin:0; height:100%; overflow:hidden; font-family:sans-serif; bac
 #connectionStatus { position:absolute; top:10px; left:10px; font-size:28px; font-weight:bold; text-shadow:0 0 8px #000; z-index:3; }
 .connected { color:#0f0; }
 .disconnected { color:#ff3b3f; }
-
-/* Status text fade out */
 #statusText {
   position:absolute;
   top:50%;
@@ -31,8 +29,6 @@ html, body { margin:0; height:100%; overflow:hidden; font-family:sans-serif; bac
   transition:opacity 1s ease;
   z-index:4;
 }
-
-/* Playlist count */
 #playlistCount {
   position:absolute;
   top:60px;
@@ -49,7 +45,7 @@ html, body { margin:0; height:100%; overflow:hidden; font-family:sans-serif; bac
 
 <div id="connectionStatus">Room ID: ——— (Chưa kết nối)</div>
 <div id="background"></div>
-<iframe id="player" allowfullscreen allow="autoplay"></iframe>
+<iframe id="player" allowfullscreen allow="autoplay" sandbox="allow-same-origin allow-scripts allow-presentation"></iframe>
 <div id="title"><span></span></div>
 <div id="statusText"></div>
 <div id="playlistCount">🎵 0 bài</div>
@@ -97,6 +93,7 @@ function showStatusText(msg){
   fadeTimeout = setTimeout(()=>{ statusTextEl.style.opacity = 0; },5000);
 }
 
+// Embed YouTube URL with minimal UI, hide end screen & info
 function setCommand(id,title){
   currentVideoId=id;
   if(!id){
@@ -104,7 +101,7 @@ function setCommand(id,title){
     titleEl.style.display='none';
     background.style.display='block';
   } else {
-    playerIframe.src = `https://www.youtube.com/embed/${id}?autoplay=1&controls=0&modestbranding=1&rel=0&fs=0&enablejsapi=1`;
+    playerIframe.src = `https://www.youtube.com/embed/${id}?autoplay=1&controls=0&modestbranding=1&rel=0&fs=0&disablekb=1&showinfo=0&iv_load_policy=3&modestbranding=1&playsinline=1`;
     background.style.display='none';
     playerIframe.style.display='block';
     titleEl.style.display='block';
@@ -124,7 +121,7 @@ onValue(commandRef,snapshot=>{
     }
 
     if(cmd.mute!==undefined){
-      playerIframe.contentWindow.postMessage(`{"event":"command","func":"${cmd.mute? "mute":"unMute"},"args":""}`,'*');
+      playerIframe.contentWindow.postMessage(`{"event":"command","func":"${cmd.mute? "mute":"unMute"}","args":""}`,'*');
       showStatusText(cmd.mute ? "🔇 Tắt tiếng" : "🔊 Bật tiếng");
     }
 
@@ -158,7 +155,6 @@ onValue(playlistRef, snapshot=>{
   const count = data ? Object.keys(data).length : 0;
   playlistCountEl.textContent = `🎵 ${count} bài`;
   if(count>0){
-    // Lấy bài mới nhất
     const latest = Object.values(data)[Object.keys(data).length-1];
     showStatusText(`✅ Thêm bài: ${latest.title}`);
   }
