@@ -6,11 +6,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <style>
 html, body { margin:0; height:100%; overflow:hidden; font-family:sans-serif; background:#000; color:#fff; }
-#background { position:absolute; top:0; left:0; width:100%; height:100%; background: url('background.png') no-repeat center center; background-size:contain; z-index:0; }
-#player { position:absolute; top:0; left:0; width:100%; height:100%; border:none; display:none; z-index:1; }
-#title { position:absolute; bottom:20px; left:0; width:100%; font-weight:bold; font-size:28px; color:#fff; white-space:nowrap; overflow:hidden; text-shadow:0 0 15px #000; display:none; z-index:2; }
-#title span { display:inline-block; padding-left:100%; animation: scrollText 15s linear infinite; }
-@keyframes scrollText { 0%{transform:translateX(0%);} 100%{transform:translateX(-100%);} }
+#background { position:absolute; top:0; left:0; width:100%; height:100%; background: url('background.png') no-repeat center center; background-size:cover; z-index:0; }
+#player { position:absolute; top:0; left:0; width:100%; height:100%; border:none; display:none; z-index:1; pointer-events:none; }
 #connectionStatus { position:absolute; top:10px; left:10px; font-size:28px; font-weight:bold; text-shadow:0 0 8px #000; z-index:3; }
 .connected { color:#0f0; }
 .disconnected { color:#ff3b3f; }
@@ -18,8 +15,8 @@ html, body { margin:0; height:100%; overflow:hidden; font-family:sans-serif; bac
 #statusText {
   position:absolute;
   top:50%;
-  left:10px;
-  transform:translateY(-50%);
+  left:50%;
+  transform:translate(-50%,-50%);
   background:rgba(0,0,0,0.5);
   color:#fff;
   padding:10px 15px;
@@ -41,6 +38,17 @@ html, body { margin:0; height:100%; overflow:hidden; font-family:sans-serif; bac
   font-size:22px;
   z-index:5;
 }
+
+#ytLogo {
+  position:absolute;
+  bottom:10px;
+  right:10px;
+  width:80px;
+  height:24px;
+  background: url('youtube-logo.png') no-repeat center center;
+  background-size:contain;
+  z-index:6;
+}
 </style>
 </head>
 <body>
@@ -48,9 +56,9 @@ html, body { margin:0; height:100%; overflow:hidden; font-family:sans-serif; bac
 <div id="connectionStatus">Room ID: ——— (Chưa kết nối)</div>
 <div id="background"></div>
 <iframe id="player" allowfullscreen allow="autoplay" allow="autoplay; encrypted-media"></iframe>
-<div id="title"><span></span></div>
 <div id="statusText"></div>
 <div id="songCount">Đã hát: 0 bài</div>
+<div id="ytLogo"></div>
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
@@ -75,8 +83,6 @@ const resetRef = ref(db,"resetScreen");
 
 // DOM
 const playerIframe = document.getElementById("player");
-const titleEl = document.getElementById("title");
-const titleSpan = titleEl.querySelector("span");
 const connectionStatusEl = document.getElementById("connectionStatus");
 const background = document.getElementById("background");
 const statusTextEl = document.getElementById("statusText");
@@ -84,68 +90,58 @@ const songCountEl = document.getElementById("songCount");
 
 let currentVideoId = null;
 let songCount = 0;
+let resetHandled = false; // Chỉ reset 1 lần
 
 let roomId = localStorage.getItem("roomId") || Math.floor(100000 + Math.random()*900000).toString();
 localStorage.setItem("roomId", roomId);
 set(connectionRef,{connected:false, roomId});
 
-let fadeTimeout = null;
 function showStatusText(msg){
-  if(fadeTimeout) clearTimeout(fadeTimeout);
   statusTextEl.textContent = msg;
   statusTextEl.style.opacity = 1;
-  fadeTimeout = setTimeout(()=>{ statusTextEl.style.opacity = 0; },4000);
+  setTimeout(()=>{ statusTextEl.style.opacity = 0; },4000);
 }
 
 // Set video
-function setCommand(id,title){
-  currentVideoId=id;
+function setCommand(id){
+  currentVideoId = id;
   if(!id){
     playerIframe.style.display='none';
-    titleEl.style.display='none';
     background.style.display='block';
   } else {
     songCount++;
     songCountEl.textContent = `Đã hát: ${songCount} bài`;
     playerIframe.src = `https://www.youtube.com/embed/${id}?autoplay=1&controls=0&modestbranding=1&rel=0&fs=0&enablejsapi=1`;
-    background.style.display='none';
+    background.style.display='block';
     playerIframe.style.display='block';
-    titleEl.style.display='block';
-    titleSpan.textContent = title;
-    showStatusText(`🎵 Đang phát: ${title}`);
   }
 }
 
-// Listen command from Remote
-let resetHandled=false; // thêm biến để chỉ reset 1 lần
+// Reset screen chỉ 1 lần
 onValue(resetRef,snapshot=>{
   if(snapshot.val()===true && !resetHandled){
-    resetHandled=true; // đánh dấu đã xử lý
+    resetHandled = true;
     location.reload();
-    set(resetRef,false); // reset Firebase về false ngay
+    set(resetRef,false);
   }
 });
 
+// Listen command
 onValue(commandRef,snapshot=>{
   const cmd = snapshot.val();
   if(!cmd) return;
   if(cmd.roomId === roomId){
-    if(cmd.resetTotal){ 
-      songCount=0; 
-      songCountEl.textContent='Đã hát: 0 bài'; 
-      showStatusText("♻️ Đã reset số bài!"); 
+    if(cmd.resetTotal){
+      songCount = 0;
+      songCountEl.textContent = 'Đã hát: 0 bài';
+      showStatusText("♻️ Đã reset số bài!");
     }
-    if(cmd.id && cmd.id !== currentVideoId) setCommand(cmd.id,cmd.title);
-    if(cmd.play!==undefined){
-      playerIframe.contentWindow.postMessage(`{"event":"command","func":"${cmd.play? "playVideo":"pauseVideo"}","args":""}`,'*');
-    }
+    if(cmd.id && cmd.id !== currentVideoId) setCommand(cmd.id);
     if(cmd.mute!==undefined){
       playerIframe.contentWindow.postMessage(`{"event":"command","func":"${cmd.mute? "mute":"unMute"}","args":""}`,'*');
-      showStatusText(cmd.mute ? "🔇 Tắt tiếng" : "🔊 Bật tiếng");
     }
     if(cmd.volume!==undefined){
       playerIframe.contentWindow.postMessage(`{"event":"command","func":"setVolume","args":[${cmd.volume}]}`,'*');
-      showStatusText(`🔊 Âm lượng: ${cmd.volume}`);
     }
     set(connectionRef,{connected:true, roomId});
   }
@@ -177,7 +173,6 @@ function onYouTubeIframeAPIReady(){
       'onStateChange': e=>{
         if(e.data===YT.PlayerState.ENDED){
           playerIframe.style.display='none';
-          titleEl.style.display='none';
           background.style.display='block';
         }
       }
