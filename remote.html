@@ -5,87 +5,25 @@
 <title>Karaoke Remote</title>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <style>
-body { 
-  margin:0; 
-  font-family:sans-serif; 
-  background:#fff; 
-  color:#ff3b3f; 
-  display:flex; 
-  flex-direction:column; 
-  height:100vh; 
-}
-#topBar {
-  display:flex;
-  justify-content:flex-end;
-  align-items:center;
-  gap:15px;
-  padding:10px 20px;
-  border-bottom:2px solid #ff3b3f;
-  font-weight:bold;
-}
-#topBar button {
-  background:#ff3b3f;
-  color:#fff;
-  border:none;
-  padding:6px 12px;
-  cursor:pointer;
-  border-radius:4px;
-  font-weight:bold;
-  transition:0.2s;
-}
-#topBar button:hover { background:#e52a2f; }
-
-#left { 
-  flex:1; 
-  padding:20px; 
-  overflow-y:auto; 
-}
-h2 { 
-  margin-bottom:15px; 
-  color:#ff3b3f; 
-  border-bottom:2px solid #ff3b3f; 
-  padding-bottom:5px; 
-}
-.search-bar { display:flex; margin-bottom:10px; }
-input { 
-  flex:1; 
-  padding:10px; 
-  border:2px solid #ff3b3f; 
-  border-radius:5px 0 0 5px; 
-  font-size:16px; 
-  outline:none; 
-}
-button.searchBtn { 
-  padding:10px 14px; 
-  border:none; 
-  background:#ff3b3f; 
-  color:white; 
-  border-radius:0 5px 5px 0; 
-  cursor:pointer; 
-  font-weight:bold; 
-}
-button.searchBtn:hover { background:#e52a2f; }
-
-.item { 
-  display:flex; 
-  align-items:center; 
-  margin-top:10px; 
-  background:#ffecec; 
-  color:#ff3b3f; 
-  padding:8px; 
-  border-radius:6px; 
-  cursor:pointer; 
-  transition:0.2s; 
-}
-.item:hover { background:#ffd6d6; }
-.item img { width:80px; height:60px; object-fit:cover; margin-right:12px; border-radius:6px; }
-.title { font-size:0.95em; line-height:1.2em; flex:1; color:#ff3b3f; }
-
-#status { margin-top:10px; font-size:0.9em; }
-.controls { display:flex; gap:10px; margin-top:15px; flex-wrap:wrap; }
-.controls button { flex:1; border-radius:6px; font-size:15px; border:none; background:#ff3b3f; color:#fff; cursor:pointer; }
-.controls button:hover { background:#e52a2f; }
-#volumeSlider { flex:2; margin-top:10px; }
+body { margin:0; font-family:sans-serif; background:#fff; color:#ff3b3f; display:flex; flex-direction:column; height:100vh; }
+#topBar{ display:flex; justify-content:flex-end; align-items:center; gap:15px; padding:10px 20px; border-bottom:2px solid #ff3b3f; font-weight:bold; }
+#topBar button{ background:#ff3b3f; color:#fff; border:none; padding:6px 12px; cursor:pointer; border-radius:4px; font-weight:bold; transition:0.2s; }
+#topBar button:hover{ background:#e52a2f; }
+#left{ flex:1; padding:20px; overflow-y:auto; }
+h2{ margin-bottom:15px; color:#ff3b3f; border-bottom:2px solid #ff3b3f; padding-bottom:5px; }
+.search-bar{ display:flex; margin-bottom:10px; }
+input{ flex:1; padding:10px; border:2px solid #ff3b3f; border-radius:5px 0 0 5px; font-size:16px; outline:none; }
+button.searchBtn{ padding:10px 14px; border:none; background:#ff3b3f; color:white; border-radius:0 5px 5px 0; cursor:pointer; font-weight:bold; }
+button.searchBtn:hover{ background:#e52a2f; }
+.item{ display:flex; align-items:center; margin-top:10px; background:#ffecec; color:#ff3b3f; padding:8px; border-radius:6px; cursor:pointer; transition:0.2s; }
+.item:hover{ background:#ffd6d6; }
+.item img{ width:80px; height:60px; object-fit:cover; margin-right:12px; border-radius:6px; }
+.title{ font-size:0.95em; line-height:1.2em; flex:1; color:#ff3b3f; }
+#status{ margin-top:10px; font-size:0.9em; }
+.controls{ display:flex; gap:10px; margin-top:15px; flex-wrap:wrap; }
+.controls button{ flex:1; border-radius:6px; font-size:15px; border:none; background:#ff3b3f; color:#fff; cursor:pointer; }
+.controls button:hover{ background:#e52a2f; }
+#volumeSlider{ flex:2; margin-top:10px; }
 </style>
 </head>
 <body>
@@ -103,15 +41,12 @@ button.searchBtn:hover { background:#e52a2f; }
     <button class="searchBtn" id="searchBtn">🔍</button>
     <button id="stopBtn">⏹️ Dừng</button>
   </div>
-
   <div style="margin-top:10px;">
     <input type="checkbox" id="karaokeOnly" checked />
     <label for="karaokeOnly">Chỉ Karaoke</label>
   </div>
-
   <div id="status"></div>
   <div id="list"></div>
-
   <div class="controls">
     <button id="muteBtn">🔇 Tắt/Bật âm thanh</button>
     <input type="range" min="0" max="100" value="100" id="volumeSlider">
@@ -136,130 +71,66 @@ const firebaseConfig = {
 };
 
 const API_KEY = "AIzaSyALYcXF9pG01RbeCx6DaZADNwNro2NKq4I";
-
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 const commandRef = ref(db, "command");
 const connectionRef = ref(db, "connectionStatus");
 
-const qInput = document.getElementById("q");
-const searchBtn = document.getElementById("searchBtn");
-const stopBtn = document.getElementById("stopBtn");
-const listEl = document.getElementById("list");
-const statusEl = document.getElementById("status");
-const muteBtn = document.getElementById("muteBtn");
-const volumeSlider = document.getElementById("volumeSlider");
-const connectBtn = document.getElementById("connectBtn");
-const disconnectBtn = document.getElementById("disconnectBtn");
-let muteState = false;
+// DOM
+const qInput=document.getElementById("q");
+const searchBtn=document.getElementById("searchBtn");
+const stopBtn=document.getElementById("stopBtn");
+const listEl=document.getElementById("list");
+const statusEl=document.getElementById("status");
+const muteBtn=document.getElementById("muteBtn");
+const volumeSlider=document.getElementById("volumeSlider");
+const connectBtn=document.getElementById("connectBtn");
+const disconnectBtn=document.getElementById("disconnectBtn");
+let muteState=false;
 
-// --- Hiển thị ngày giờ & Refresh ---
-const dateTimeEl = document.getElementById("dateTime");
-const refreshBtn = document.getElementById("refreshBtn");
-function updateDateTime() {
-  const now = new Date();
-  dateTimeEl.textContent = now.toLocaleString();
-}
+// Ngày giờ & Refresh
+const dateTimeEl=document.getElementById("dateTime");
+const refreshBtn=document.getElementById("refreshBtn");
+function updateDateTime(){ const now=new Date(); dateTimeEl.textContent=now.toLocaleString(); }
 setInterval(updateDateTime,1000);
 updateDateTime();
-refreshBtn.onclick = ()=> location.reload();
+refreshBtn.onclick=()=>location.reload();
 
-// --- TÌM KIẾM VIDEO ---
-async function search() {
-  const q = qInput.value.trim();
-  const karaokeOnly = document.getElementById("karaokeOnly").checked;
-  if (!q) return alert("Nhập từ khóa!");
-  listEl.innerHTML = "";
-  statusEl.textContent = "🔍 Đang tìm kiếm...";
-
-  try {
-    const res = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=12&q=${encodeURIComponent(q + (karaokeOnly ? " karaoke" : ""))}&videoEmbeddable=true&key=${API_KEY}`);
-    const data = await res.json();
-    statusEl.textContent = "";
-    if (!data.items || data.items.length === 0) {
-      statusEl.textContent = "Không tìm thấy kết quả.";
-      return;
-    }
-    data.items.forEach(v => {
-      if (!v.id?.videoId) return;
-      const el = document.createElement("div");
-      el.className = "item";
-      el.innerHTML = `<img src="${v.snippet.thumbnails.medium.url}"><div class="title">${v.snippet.title}</div>`;
-      el.onclick = () => {
-        const roomId = localStorage.getItem("roomId");
-        if(!roomId){ alert("Chưa kết nối Room!"); return; }
-        set(commandRef, { id: v.id.videoId, title: v.snippet.title, play: true, mute: muteState, roomId });
-        statusEl.textContent = "▶️ Đang phát: " + v.snippet.title;
-      };
+// Search YouTube
+async function search(){
+  const q=qInput.value.trim();
+  const karaokeOnly=document.getElementById("karaokeOnly").checked;
+  if(!q) return alert("Nhập từ khóa!");
+  listEl.innerHTML=""; statusEl.textContent="🔍 Đang tìm kiếm...";
+  try{
+    const res=await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=12&q=${encodeURIComponent(q + (karaokeOnly?" karaoke":""))}&videoEmbeddable=true&key=${API_KEY}`);
+    const data=await res.json();
+    statusEl.textContent="";
+    if(!data.items || data.items.length===0){ statusEl.textContent="Không tìm thấy kết quả."; return; }
+    data.items.forEach(v=>{
+      if(!v.id?.videoId) return;
+      const el=document.createElement("div");
+      el.className="item";
+      el.innerHTML=`<img src="${v.snippet.thumbnails.medium.url}"><div class="title">${v.snippet.title}</div>`;
+      el.onclick=()=>{ set(commandRef,{id:v.id.videoId,title:v.snippet.title,play:true,mute:muteState,roomId:localStorage.getItem("roomId")}); statusEl.textContent="▶️ Đang phát: "+v.snippet.title; };
       listEl.appendChild(el);
     });
-  } catch (err) {
-    console.error(err);
-    statusEl.textContent = "⚠️ Lỗi khi tìm kiếm!";
-  }
+  }catch(err){ console.error(err); statusEl.textContent="⚠️ Lỗi khi tìm kiếm!"; }
 }
+searchBtn.onclick=search;
+qInput.addEventListener("keypress",e=>{if(e.key==="Enter") search();});
 
-// --- ĐIỀU KHIỂN ---
-searchBtn.onclick = search;
-qInput.addEventListener("keypress", e => { if (e.key === "Enter") search(); });
+// Controls
+stopBtn.onclick=()=>{ set(commandRef,{id:"",title:"Intro / Slide",play:false,mute:muteState,roomId:localStorage.getItem("roomId")}); statusEl.textContent="⏹️ Đã dừng phát"; };
+muteBtn.onclick=()=>{ muteState=!muteState; set(commandRef,{mute:muteState,roomId:localStorage.getItem("roomId")}); muteBtn.textContent=muteState?"🔊 Bật âm thanh":"🔇 Tắt âm thanh"; };
+volumeSlider.oninput=()=>{ set(commandRef,{volume:Number(volumeSlider.value),roomId:localStorage.getItem("roomId")}); };
 
-stopBtn.onclick = () => {
-  const roomId = localStorage.getItem("roomId");
-  if(!roomId){ alert("Chưa kết nối Room!"); return; }
-  set(commandRef, { id: "", title: "Intro / Slide", play: false, mute: muteState, roomId });
-  statusEl.textContent = "⏹️ Đã dừng phát";
-};
+// Connect / Disconnect
+connectBtn.onclick=()=>{ let room=prompt("Nhập Room ID (6 số) để kết nối:"); if(!room||!/^\d{6}$/.test(room)){alert("Phải nhập đúng Room ID 6 số!"); return;} localStorage.setItem("roomId",room); set(connectionRef,{connected:true,roomId:room}).then(()=>alert("✅ Đã kết nối Room: "+room)); };
+disconnectBtn.onclick=()=>{ let room=localStorage.getItem("roomId"); if(!room){alert("Chưa có Room nào kết nối!"); return;} set(connectionRef,{connected:false,roomId:""}).then(()=>{localStorage.removeItem("roomId"); alert("❌ Đã ngắt kết nối Room: "+room);}); };
 
-muteBtn.onclick = () => {
-  muteState = !muteState;
-  const roomId = localStorage.getItem("roomId");
-  if(!roomId){ alert("Chưa kết nối Room!"); return; }
-  set(commandRef, { mute: muteState, roomId });
-  muteBtn.textContent = muteState ? "🔊 Bật âm thanh" : "🔇 Tắt âm thanh";
-};
-
-volumeSlider.oninput = () => {
-  const roomId = localStorage.getItem("roomId");
-  if(!roomId){ alert("Chưa kết nối Room!"); return; }
-  set(commandRef, { volume: Number(volumeSlider.value), roomId });
-};
-
-// --- Kết nối Room ---
-connectBtn.onclick = () => {
-  let room = prompt("Nhập Room ID (6 số) để kết nối:");
-  if(!room || !/^\d{6}$/.test(room)){
-    alert("Phải nhập đúng Room ID 6 số!");
-    return;
-  }
-  localStorage.setItem("roomId", room);
-  set(connectionRef, { connected: true, roomId: room }).then(()=>{
-    alert("✅ Đã kết nối Room: " + room);
-  });
-};
-
-// --- Ngắt kết nối ---
-disconnectBtn.onclick = () => {
-  const room = localStorage.getItem("roomId");
-  if(!room){
-    alert("Chưa có Room nào kết nối!");
-    return;
-  }
-  set(connectionRef, { connected: false, roomId: "" }).then(()=>{
-    localStorage.removeItem("roomId");
-    alert("❌ Đã ngắt kết nối Room: " + room);
-  }).catch(err=>{
-    console.error(err);
-    alert("⚠️ Lỗi khi ngắt kết nối!");
-  });
-};
-
-// --- CẬP NHẬT TRẠNG THÁI TỪ SCREEN ---
-onValue(commandRef, snapshot => {
-  const cmd = snapshot.val();
-  if (!cmd) return;
-  muteBtn.textContent = cmd.mute ? "🔊 Bật âm thanh" : "🔇 Tắt âm thanh";
-  volumeSlider.value = cmd.volume ?? 100;
-});
+// Update command from Screen
+onValue(commandRef,snapshot=>{ const cmd=snapshot.val(); if(!cmd) return; muteBtn.textContent=cmd.mute?"🔊 Bật âm thanh":"🔇 Tắt âm thanh"; volumeSlider.value=cmd.volume??100; });
 </script>
 </body>
 </html>
