@@ -5,21 +5,43 @@
 <title>Karaoke Remote</title>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <style>
-body { margin:0; font-family:sans-serif; background:#fff; color:#ff3b3f; display:flex; flex-direction:column; height:100vh; }
-#topBar{ display:flex; justify-content:flex-end; align-items:center; gap:15px; padding:10px 20px; border-bottom:2px solid #ff3b3f; font-weight:bold; }
-#topBar button{ background:#ff3b3f; color:#fff; border:none; padding:6px 12px; cursor:pointer; border-radius:4px; font-weight:bold; transition:0.2s; }
+body { 
+  margin:0; font-family:sans-serif; background:#fff; color:#ff3b3f; display:flex; flex-direction:column; height:100vh; 
+}
+#topBar{ 
+  display:flex; justify-content:flex-end; align-items:center; gap:15px; padding:10px 20px; border-bottom:2px solid #ff3b3f; font-weight:bold; 
+}
+#topBar button{ 
+  background:#ff3b3f; color:#fff; border:none; cursor:pointer; border-radius:4px; font-weight:bold; transition:0.2s; 
+  padding:12px 16px; font-size:16px; min-width:90px; text-align:center;
+}
 #topBar button:hover{ background:#e52a2f; }
+
 #left{ flex:1; padding:20px; overflow-y:auto; }
 h2{ margin-bottom:15px; color:#ff3b3f; border-bottom:2px solid #ff3b3f; padding-bottom:5px; }
 .search-bar{ display:flex; margin-bottom:10px; flex-wrap:wrap; gap:5px; }
-input{ flex:1; padding:10px; border:2px solid #ff3b3f; border-radius:5px; font-size:16px; outline:none; }
-button.searchBtn, .search-bar button{ padding:10px 14px; border:none; background:#ff3b3f; color:white; border-radius:5px; cursor:pointer; font-weight:bold; }
-button.searchBtn:hover{ background:#e52a2f; }
+.search-bar input{ flex:1; padding:12px; border:2px solid #ff3b3f; border-radius:5px; font-size:16px; outline:none; }
+.search-bar button{ 
+  flex:1; padding:12px; border:none; background:#ff3b3f; color:white; border-radius:5px; cursor:pointer; font-weight:bold; font-size:16px;
+  text-align:center;
+}
+.search-bar button:hover{ background:#e52a2f; }
+
 #status{ margin-top:10px; font-size:0.9em; }
+
 .controls{ display:flex; gap:10px; margin-top:15px; flex-wrap:wrap; }
-.controls button{ flex:1; border-radius:6px; font-size:15px; border:none; background:#ff3b3f; color:#fff; cursor:pointer; }
+.controls button{ 
+  flex:1; border-radius:6px; font-size:16px; border:none; background:#ff3b3f; color:#fff; cursor:pointer; padding:14px 0; 
+  min-width:90px; text-align:center;
+}
 .controls button:hover{ background:#e52a2f; }
 #volumeSlider{ flex:2; margin-top:10px; }
+
+/* Ẩn nút Mute và thanh âm lượng */
+#volumeSlider, #muteBtn {
+  display: none !important;
+}
+
 .item{ display:flex; align-items:center; margin-top:10px; background:#ffecec; color:#ff3b3f; padding:8px; border-radius:6px; cursor:pointer; transition:0.2s; }
 .item:hover{ background:#ffd6d6; }
 .item img{ width:80px; height:60px; object-fit:cover; margin-right:12px; border-radius:6px; }
@@ -125,13 +147,11 @@ async function search(){
       <div class="title">${v.snippet.title}</div>
     `;
     el.onclick=()=>{
-
       update(commandRef,{
         id:v.id.videoId,
         title:v.snippet.title,
         roomId:roomId
       });
-
       statusEl.textContent=`▶️ Đang phát: ${v.snippet.title}`;
     };
     listEl.appendChild(el);
@@ -147,7 +167,7 @@ resetScreenBtn.onclick=()=>{
   setTimeout(()=>set(resetRef,false),2000);
 };
 
-// Mute
+// Mute (ẩn nhưng vẫn JS)
 let muteState=false;
 muteBtn.onclick=()=>{
   muteState=!muteState;
@@ -155,12 +175,9 @@ muteBtn.onclick=()=>{
   muteBtn.textContent = muteState? "🔊 Bật âm thanh" : "🔇 Tắt âm thanh";
 };
 
-// Volume
+// Volume (ẩn nhưng vẫn JS)
 volumeSlider.oninput=()=>{
-  update(commandRef,{
-    volume:Number(volumeSlider.value),
-    roomId
-  });
+  update(commandRef,{volume:Number(volumeSlider.value), roomId});
 };
 
 // Connect
