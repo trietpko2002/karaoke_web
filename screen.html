@@ -1,59 +1,110 @@
 <!DOCTYPE html>
 <html lang="vi">
 <head>
-<meta charset="UTF-8">
+<meta charset="UTF-8" />
 <title>Karaoke Screen</title>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<style>
-html, body { 
-  margin:0; height:100%; overflow:hidden; 
-  font-family:sans-serif; background:#000; color:#fff;
-}
-#background { 
-  position:absolute; top:0; left:0; width:100%; height:100%; 
-  background: url('background.png') no-repeat center center; 
-  background-size:contain; 
-  background-color:#000;
-  z-index:0;
-}
-#player { 
-  position:absolute; top:0; left:0; width:100%; height:100%; 
-  border:none; display:none; z-index:1;
-}
-#title { 
-  position:absolute; bottom:20px; left:0; width:100%; font-weight:bold; font-size:28px;
-  color:#fff; white-space:nowrap; overflow:hidden; text-shadow:0 0 15px #000; 
-  display:none; z-index:2;
-}
-#title span { display:inline-block; padding-left:100%; animation: scrollText 15s linear infinite; }
-@keyframes scrollText { 0%{transform:translateX(0%);} 100%{transform:translateX(-100%);} }
 
-#connectionStatus { 
-  position:absolute; top:10px; left:10px; font-size:24px; font-weight:bold;
-  text-shadow:0 0 8px #000; z-index:3;
+<style>
+html, body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #000;
+  font-family: sans-serif;
+  color: #fff;
+  user-select: none;
 }
-.connected { color:#0f0; }
-.disconnected { color:#ff3b3f; }
+
+/* Background */
+#background {
+  position: absolute;
+  inset: 0;
+  background: url('background.png') center center no-repeat;
+  background-size: contain;
+  z-index: 0;
+}
+
+/* Video player – iframe sẽ được tạo/destroy để giảm lag */
+#player {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: none;
+  display: none;
+  z-index: 1;
+}
+
+/* Title */
+#title {
+  position: absolute;
+  bottom: 20px;
+  left: 0; width: 100%;
+  font-size: 32px;
+  font-weight: bold;
+  white-space: nowrap;
+  overflow: hidden;
+  text-shadow: 0 0 15px #000;
+  display: none;
+  z-index: 2;
+}
+
+#title span {
+  display: inline-block;
+  will-change: transform;
+  padding-left: 100%;
+  animation: scrollText 14s linear infinite;
+}
+
+/* Smooth 60fps */
+@keyframes scrollText {
+  0% { transform: translateX(0%); }
+  100% { transform: translateX(-100%); }
+}
+
+#connectionStatus {
+  position: absolute;
+  top: 10px; left: 10px;
+  font-size: 24px;
+  font-weight: bold;
+  text-shadow: 0 0 8px #000;
+  z-index: 3;
+}
+
+.connected { color: #0f0; }
+.disconnected { color: #ff3b3f; }
 
 #counter {
-  position:absolute; top:10px; right:10px; font-size:24px; font-weight:bold;
-  color:#ff3b3f; text-shadow:0 0 8px #000; z-index:3;
+  position: absolute;
+  top: 10px; right: 10px;
+  font-size: 24px;
+  font-weight: bold;
+  color: #ff3b3f;
+  text-shadow: 0 0 8px #000;
+  z-index: 3;
 }
 </style>
+
 </head>
 <body>
 
 <div id="connectionStatus">Room ID: ——— (Chưa kết nối)</div>
 <div id="counter">🎵 Số bài: 0</div>
 <div id="background"></div>
-<iframe id="player" allowfullscreen allow="autoplay" allow="autoplay; encrypted-media"></iframe>
+
+<!-- iframe sẽ được thay thế toàn bộ để tránh lag -->
+<iframe id="player" allow="autoplay; encrypted-media" allowfullscreen></iframe>
+
 <div id="title"><span></span></div>
 
 <script type="module">
+/* ==============================
+   Firebase Setup 
+============================== */
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
 import { getDatabase, ref, onValue, set, update } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-database.js";
 
-// Firebase config
 const firebaseConfig = {
   apiKey: "AIzaSyC1JW_dg-YChaizarbS-7UUN3njFomMPvI",
   authDomain: "karaokeweb-d414b.firebaseapp.com",
@@ -64,86 +115,120 @@ const firebaseConfig = {
   appId: "1:183555717781:web:d3920b342c5d27e107f99c",
   measurementId: "G-VZ228HB7GF"
 };
+
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
+
 const commandRef = ref(db,"command");
 const connectionRef = ref(db,"connectionStatus");
 const resetRef = ref(db,"resetScreen");
 const countRef = ref(db,"playedCount");
 
-const playerIframe = document.getElementById("player");
+/* ==============================
+   DOM
+============================== */
+const player = document.getElementById("player");
 const background = document.getElementById("background");
-const connectionStatusEl = document.getElementById("connectionStatus");
 const titleEl = document.getElementById("title");
 const titleSpan = titleEl.querySelector("span");
+const connectionStatusEl = document.getElementById("connectionStatus");
 const counterEl = document.getElementById("counter");
 
-// Room ID
-let roomId = localStorage.getItem("roomId") || Math.floor(100000 + Math.random()*900000).toString();
+/* ==============================
+   ROOM ID
+============================== */
+let roomId = localStorage.getItem("roomId") || String(Math.floor(100000 + Math.random() * 900000));
 localStorage.setItem("roomId", roomId);
+
 connectionStatusEl.textContent = `Room ID: ${roomId} (Chưa kết nối)`;
-set(connectionRef,{connected:false, roomId});
+set(connectionRef, { connected: false, roomId });
 
-// Reset screen
-let resetHandled=false;
-onValue(resetRef,snapshot=>{
-  if(snapshot.val()===true && !resetHandled){
-    resetHandled=true;
-    playerIframe.src = '';
-    playerIframe.style.display='none';
-    titleEl.style.display='none';
-    background.style.display='block';
-    set(resetRef,false);
-    setTimeout(()=>{ resetHandled=false; },500);
+/* ==============================
+   RESET SCREEN
+============================== */
+let resetHandled = false;
+
+onValue(resetRef, s => {
+  if (s.val() === true && !resetHandled) {
+    resetHandled = true;
+
+    player.src = "";
+    player.style.display = "none";
+    titleEl.style.display = "none";
+    background.style.display = "block";
+
+    set(resetRef, false);
+
+    setTimeout(() => resetHandled = false, 500);
   }
 });
 
-// Initialize played counter
+/* ==============================
+   COUNTER
+============================== */
 let playedCount = 0;
+
 onValue(countRef, snapshot => {
-  const val = snapshot.val();
-  if(val && typeof val === "number") {
-    playedCount = val;
+  const v = snapshot.val();
+  if (typeof v === "number") {
+    playedCount = v;
     counterEl.textContent = `🎵 Số bài: ${playedCount}`;
   }
 });
 
-// Command listener
-let currentVideoId=null;
-onValue(commandRef,snapshot=>{
+/* ==============================
+   PHÁT VIDEO (đã tối ưu)
+============================== */
+let currentVideoId = null;
+
+function playVideo(id, title) {
+  currentVideoId = id;
+
+  // Tạo embed YouTube siêu nhẹ
+  player.src =
+    `https://www.youtube.com/embed/${id}?autoplay=1&controls=0&rel=0&modestbranding=1&fs=0&disablekb=1&iv_load_policy=3`;
+
+  player.style.display = "block";
+  background.style.display = "none";
+
+  titleEl.style.display = "block";
+  titleSpan.textContent = `🎵 Đang phát: ${title}`;
+
+  // Tăng số bài
+  playedCount++;
+  set(countRef, playedCount);
+  counterEl.textContent = `🎵 Số bài: ${playedCount}`;
+}
+
+/* ==============================
+   Lắng nghe lệnh từ Remote
+============================== */
+onValue(commandRef, snapshot => {
   const cmd = snapshot.val();
-  if(!cmd || cmd.roomId !== roomId) return;
+  if (!cmd || cmd.roomId !== roomId) return;
 
-  // Reset số bài khi remote bấm reset
-  if(cmd.resetTotal){
+  if (cmd.resetTotal) {
     playedCount = 0;
-    counterEl.textContent = `🎵 Số bài: ${playedCount}`;
-    set(countRef, playedCount);
-    update(commandRef, { resetTotal:false, roomId });
+    set(countRef, 0);
+    counterEl.textContent = `🎵 Số bài: 0`;
+    update(commandRef, { resetTotal: false, roomId });
   }
 
-  if(cmd.id && cmd.id !== currentVideoId){
-    currentVideoId = cmd.id;
-    playerIframe.src = `https://www.youtube.com/embed/${cmd.id}?autoplay=1&controls=0&rel=0&modestbranding=1&fs=0&disablekb=1&iv_load_policy=3`;
-    playerIframe.style.display='block';
-    background.style.display='none';
-    titleEl.style.display='block';
-    titleSpan.textContent = `🎵 Đang phát: ${cmd.title}`;
-
-    // Tăng số bài đã phát
-    playedCount++;
-    counterEl.textContent = `🎵 Số bài: ${playedCount}`;
-    set(countRef, playedCount);
+  if (cmd.id && cmd.id !== currentVideoId) {
+    playVideo(cmd.id, cmd.title);
   }
 
-  set(connectionRef,{connected:true, roomId});
+  set(connectionRef, { connected: true, roomId });
 });
 
-// Connection status
-onValue(connectionRef,snapshot=>{
-  const data = snapshot.val();
-  if(data?.connected){
-    connectionStatusEl.textContent = `✅ Room: ${data.roomId} (OK)`;
+/* ==============================
+   CONNECTION STATUS
+============================== */
+onValue(connectionRef, snapshot => {
+  const d = snapshot.val();
+
+  if (d?.connected) {
+    connectionStatusEl.textContent = `✅ Room: ${d.roomId} (OK)`;
     connectionStatusEl.classList.add("connected");
     connectionStatusEl.classList.remove("disconnected");
   } else {
@@ -152,26 +237,7 @@ onValue(connectionRef,snapshot=>{
     connectionStatusEl.classList.remove("connected");
   }
 });
-
-// Load YouTube API
-let tag=document.createElement('script');
-tag.src="https://www.youtube.com/iframe_api";
-document.body.appendChild(tag);
-
-function onYouTubeIframeAPIReady(){
-  window.player = new YT.Player('player',{
-    events:{
-      'onReady':()=>{},
-      'onStateChange': e=>{
-        if(e.data===YT.PlayerState.ENDED){
-          playerIframe.style.display='none';
-          titleEl.style.display='none';
-          background.style.display='block';
-        }
-      }
-    }
-  });
-}
 </script>
+
 </body>
 </html>
