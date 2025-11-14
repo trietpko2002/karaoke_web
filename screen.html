@@ -35,45 +35,23 @@ html, body {
 .connected { color:#0f0; }
 .disconnected { color:#ff3b3f; }
 
-#audioControl {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  background: rgba(0,0,0,0.5);
-  padding: 10px 16px;
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  opacity: 0;
-  transition: opacity 0.5s ease;
-  z-index: 5;
-  box-shadow: 0 0 12px rgba(0,0,0,0.6);
+#counter {
+  position:absolute; top:10px; right:10px; font-size:24px; font-weight:bold;
+  color:#ff3b3f; text-shadow:0 0 8px #000; z-index:3;
 }
-#audioControl.show { opacity: 1; }
-
-#audioIcon { font-size: 26px; }
-#volumeBarContainer { width: 120px; height: 8px; background: #444; border-radius: 4px; overflow: hidden; }
-#volumeBar { height: 100%; width: 50%; background: linear-gradient(90deg, #0f0, #5fff5f); transition: width 0.3s ease; }
 </style>
 </head>
 <body>
 
 <div id="connectionStatus">Room ID: ——— (Chưa kết nối)</div>
+<div id="counter">🎵 Số bài: 0</div>
 <div id="background"></div>
 <iframe id="player" allowfullscreen allow="autoplay" allow="autoplay; encrypted-media"></iframe>
 <div id="title"><span></span></div>
 
-<div id="audioControl">
-  <div id="audioIcon">🔊</div>
-  <div id="volumeBarContainer">
-    <div id="volumeBar"></div>
-  </div>
-</div>
-
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
-import { getDatabase, ref, onValue, set } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-database.js";
+import { getDatabase, ref, onValue, set, update } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-database.js";
 
 // Firebase config
 const firebaseConfig = {
@@ -91,16 +69,14 @@ const db = getDatabase(app);
 const commandRef = ref(db,"command");
 const connectionRef = ref(db,"connectionStatus");
 const resetRef = ref(db,"resetScreen");
+const countRef = ref(db,"playedCount");
 
 const playerIframe = document.getElementById("player");
 const background = document.getElementById("background");
 const connectionStatusEl = document.getElementById("connectionStatus");
 const titleEl = document.getElementById("title");
 const titleSpan = titleEl.querySelector("span");
-
-const audioControlEl = document.getElementById("audioControl");
-const audioIconEl = document.getElementById("audioIcon");
-const volumeBarEl = document.getElementById("volumeBar");
+const counterEl = document.getElementById("counter");
 
 // Room ID
 let roomId = localStorage.getItem("roomId") || Math.floor(100000 + Math.random()*900000).toString();
@@ -108,28 +84,27 @@ localStorage.setItem("roomId", roomId);
 connectionStatusEl.textContent = `Room ID: ${roomId} (Chưa kết nối)`;
 set(connectionRef,{connected:false, roomId});
 
-// Audio control
-let audioFadeTimeout=null;
-function showAudioControl(){
-  audioControlEl.classList.add("show");
-  if(audioFadeTimeout) clearTimeout(audioFadeTimeout);
-  audioFadeTimeout = setTimeout(()=> audioControlEl.classList.remove("show"),3000);
-}
-
 // Reset screen
 let resetHandled=false;
 onValue(resetRef,snapshot=>{
   if(snapshot.val()===true && !resetHandled){
     resetHandled=true;
-
-    currentVideoId = null;
     playerIframe.src = '';
     playerIframe.style.display='none';
     titleEl.style.display='none';
     background.style.display='block';
-
     set(resetRef,false);
     setTimeout(()=>{ resetHandled=false; },500);
+  }
+});
+
+// Initialize played counter
+let playedCount = 0;
+onValue(countRef, snapshot => {
+  const val = snapshot.val();
+  if(val && typeof val === "number") {
+    playedCount = val;
+    counterEl.textContent = `🎵 Số bài: ${playedCount}`;
   }
 });
 
@@ -139,6 +114,14 @@ onValue(commandRef,snapshot=>{
   const cmd = snapshot.val();
   if(!cmd || cmd.roomId !== roomId) return;
 
+  // Reset số bài khi remote bấm reset
+  if(cmd.resetTotal){
+    playedCount = 0;
+    counterEl.textContent = `🎵 Số bài: ${playedCount}`;
+    set(countRef, playedCount);
+    update(commandRef, { resetTotal:false, roomId });
+  }
+
   if(cmd.id && cmd.id !== currentVideoId){
     currentVideoId = cmd.id;
     playerIframe.src = `https://www.youtube.com/embed/${cmd.id}?autoplay=1&controls=0&rel=0&modestbranding=1&fs=0&disablekb=1&iv_load_policy=3`;
@@ -146,18 +129,11 @@ onValue(commandRef,snapshot=>{
     background.style.display='none';
     titleEl.style.display='block';
     titleSpan.textContent = `🎵 Đang phát: ${cmd.title}`;
-  }
 
-  if(cmd.mute!==undefined){
-    playerIframe.contentWindow.postMessage(`{"event":"command","func":"${cmd.mute? "mute":"unMute"}","args":""}`,'*');
-    audioIconEl.textContent = cmd.mute ? "🔇" : "🔊";
-    showAudioControl();
-  }
-
-  if(cmd.volume!==undefined){
-    playerIframe.contentWindow.postMessage(`{"event":"command","func":"setVolume","args":[${cmd.volume}]}`,'*');
-    volumeBarEl.style.width = `${cmd.volume}%`;
-    showAudioControl();
+    // Tăng số bài đã phát
+    playedCount++;
+    counterEl.textContent = `🎵 Số bài: ${playedCount}`;
+    set(countRef, playedCount);
   }
 
   set(connectionRef,{connected:true, roomId});
